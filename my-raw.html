@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ดูรูป RAW 10 รูป - Card Matem V4 FIXED</title>
+<script src="https://cdn.tailwindcss.com"></script><script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<style>.zoom-img{cursor:zoom-in;transition:.3s}.zoom-img:active{transform:scale(2.5);z-index:50;position:relative}.lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}</style>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body class="bg-black text-white min-h-screen">
+<div class="max-w-[800px] mx-auto p-5">
+<div class="flex justify-between items-center">
+<a href="https://www.cardmatem.store/" class="text-sm opacity-60">← กลับหน้าแรก</a>
+<div class="flex gap-2 text-[10px]"><a href="/pregrade" class="bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full">สั่ง Pregrade</a><a href="/my-orders" class="bg-zinc-800 px-3 py-1 rounded-full">ออเดอร์</a><a href="/my-account" class="bg-zinc-800 border border-white/10 px-3 py-1 rounded-full">👤 My Acc</a><span id="authBadge" class="bg-zinc-800 px-2 py-1 rounded-full">...</span></div>
+</div>
+
+<div class="mt-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 flex justify-between items-center">
+  <div class="text-[10px] text-emerald-300 font-bold">✅ V4 FIXED • รองรับ CM-0002 และ 2 • Pagination • กันรูปพัง • Lightbox</div>
+  <div class="text-[8px] bg-emerald-500 text-black px-2 py-0.5 rounded-full font-black">FIXED</div>
+</div>
+
+<h1 class="text-2xl font-black mt-6">📸 ดูรูป RAW 10 รูป V4</h1>
+<p class="text-sm opacity-50 mt-1">ใส่รหัส RAW-xxxx หรือ CM-0002 หรือ 2 (เล็ก-ใหญ่ก็ได้) • Sequence next CM-0003</p>
+<div class="mt-6 flex gap-2">
+<input id="q" placeholder="RAW-050823 หรือ CM-0002 หรือ 2" class="flex-1 bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none">
+<button id="btn" class="bg-yellow-500 text-black font-black px-6 rounded-xl text-sm">ดูรูป</button>
+</div>
+<div class="mt-3 flex gap-2 text-[11px] flex-wrap">
+<a href="/my-raw?code=RAW-050823" class="bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full">เทส RAW-050823</a>
+<a href="/my-raw?code=CM-0002" class="bg-zinc-800 px-3 py-1 rounded-full">ดูทั้งหมด CM-0002</a>
+<a href="/admin-add-card" class="bg-zinc-800 px-3 py-1 rounded-full">ไปถ่ายรูป</a>
+<button onclick="clearSearch()" class="bg-zinc-800 border border-white/10 px-3 py-1 rounded-full">ล้าง</button>
+</div>
+<div id="result" class="mt-6"></div>
+<div class="flex justify-between items-center mt-4 hidden" id="pager"><button id="prevBtn" onclick="prevPage()" class="bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] disabled:opacity-30">← ก่อนหน้า</button><span id="pageInfo" class="text-[11px] text-zinc-400">หน้า 1</span><button id="nextBtn" onclick="nextPage()" class="bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] disabled:opacity-30">ถัดไป →</button></div>
+</div>
+
+<div id="lightbox" class="lightbox hidden" onclick="this.classList.add('hidden')"><img id="lbImg" data-broken-src-removed="true" class="max-w-full max-h-full rounded-xl border border-white/10"><div class="absolute bottom-6 text-[11px] text-white bg-black/70 px-3 py-1 rounded-full">จิ้มที่ไหนก็ได้เพื่อปิด • รูป 4K</div></div>
+
+<script>
+const supa = window.supa || (window.getSupa ? window.getSupa() : null); // FIXED V3 singleton
+const R2_PUBLIC="https://pub-1d9eb2a4134149d6b7fcf5cc9528ace4.r2.dev";
+
+const LABELS_QR_8=["หน้า","หลัง","วัด Center หน้า","วัด Center หลัง","UV 365nm หน้า","UV 365nm หลัง","ตำหนิ (วงแดง) หน้า","ตำหนิ (วงแดง) หลัง"];
+function getLabelsForEntries(entries){ if(!entries) return LABELS_TH; if(entries.length<=8) return LABELS_QR_8; return LABELS_TH; }
+
+const LABELS_TH=["1.หน้า","2.หลัง","3.ขอบบน","4.ขอบล่าง","5.ขอบซ้าย","6.ขอบขวา","7.มุม TL","8.มุม TR","9.มุม BL","10.มุม BR"];
+const FILES_REAL=["หน้า.jpg","หลัง.jpg","ขอบบน.jpg","ขอบล่าง.jpg","ขอบซ้าย.jpg","ขอบขวา.jpg","มุม_TL.jpg","มุม_TR.jpg","มุม_BL.jpg","มุม_BR.jpg"];
+const PAGE_SIZE=20;
+let currentPage=1, currentQuery='', totalCount=0;
+
+function formatMemberNo(n){ if(n==null) return '-'; return 'CM-'+String(n).padStart(4,'0'); }
+function parseMemberNo(input){ if(!input) return null; const s=String(input).trim().toUpperCase().replace(/^CM-?/,'').trim(); if(!/^\d+$/.test(s)) return null; const num=parseInt(s,10); return isNaN(num)?null:num; }
+function clearSearch(){ document.getElementById('q').value=''; currentPage=1; currentQuery=''; document.getElementById('result').innerHTML=''; document.getElementById('pager').classList.add('hidden'); }
+function prevPage(){ if(currentPage>1){ currentPage--; search(false); } }
+function nextPage(){ if(currentPage<Math.ceil(totalCount/PAGE_SIZE)){ currentPage++; search(false); } }
+
+// === FIXED FLOW: Raw 10ใบ + ต่ออายุ 15วัน / QR ไม่จำกัด ===
+async function renewListingRaw(listingId, isQR){
+  try{
+    const ne = new Date(); ne.setDate(ne.getDate()+15);
+    const {error} = await supa.from('market_listings').update({expires_at: ne.toISOString(), status:'active'}).eq('id', listingId);
+    if(error) throw error;
+    await supa.from('market_cards').update({expires_at: ne.toISOString(), status:'active'}).eq('id', listingId);
+    showModal((isQR?'🏆 QR':'📦 Raw')+' ต่ออายุ +15 วัน สำเร็จ!');
+    search(false);
+  }catch(e){ showModal('ต่ออายุไม่สำเร็จ: '+e.message); }
+}
+
+function getExpiryBadgeRaw(expires_at){
+  if(!expires_at) return '';
+  const diff = Math.ceil((new Date(expires_at) - new Date())/86400000);
+  if(diff<=0) return ' <span style="background:#ef4444;color:white;padding:2px 6px;border-radius:9999px;font-size:9px">หมดอายุ</span>';
+  if(diff<=3) return ` <span style="background:#eab308;color:black;padding:2px 6px;border-radius:9999px;font-size:9px;font-weight:bold">⏰ เหลือ ${diff} วัน</span>`;
+  return ` <span style="background:#3f3f46;color:#d4d4d8;padding:2px 6px;border-radius:9999px;font-size:9px">${diff} วัน</span>`;
+}
+
+function openLightbox(url){ document.getElementById('lbImg').src=url; document.getElementById('lightbox').classList.remove('hidden'); }
+
+async function checkAuth(){
+  try{
+    const {data:{user}}=await supa.auth.getUser();
+    if(user){
+      const {data:cust}=await supa.from('customers').select('member_no').eq('email', user.email).maybeSingle();
+      document.getElementById('authBadge').innerText=user.email.split('@')[0]+(cust?` ${formatMemberNo(cust.member_no)}`:'');
+      document.getElementById('authBadge').className='bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded-full';
+      if(!document.getElementById('q').value && cust){ document.getElementById('q').value=formatMemberNo(cust.member_no); }
+    }else{ document.getElementById('authBadge').innerText='ไม่ได้ล็อกอิน'; document.getElementById('authBadge').className='bg-zinc-800 px-2 py-1 rounded-full'; }
+  }catch(e){}
+}
+
+async function search(resetPage=true){
+ if(resetPage) currentPage=1;
+ let q=document.getElementById('q').value.trim();
+ if(!q) return;
+ currentQuery=q;
+ const qUpper=q.toUpperCase();
+ const mn=parseMemberNo(q);
+ const qFormatted=mn!==null?formatMemberNo(mn):qUpper;
+ document.getElementById('q').value=qFormatted;
+ document.getElementById('result').innerHTML='<div class="text-center py-10 text-zinc-500">กำลังโหลดหน้า '+currentPage+'...</div>';
+ let data=null, count=0;
+
+ const from=(currentPage-1)*PAGE_SIZE, to=from+PAGE_SIZE-1;
+
+ try{
+   // ✅ FIXED: รองรับทั้ง RAW-xxx และ CM-0002 และ 2
+   let r=null;
+   if(qUpper.startsWith('RAW-') || qUpper.startsWith('PRE-')){
+     // ค้นตรง id ก่อน
+     r=await supa.from('raw_cards').select('*',{count:'exact'}).eq('id', qUpper).range(from,to);
+     if(!r.data||!r.data.length){
+       r=await supa.from('raw_cards').select('*',{count:'exact'}).ilike('id', `%${qUpper}%`).order('created_at',{ascending:false}).range(from,to);
+     }
+   }else if(mn!==null){
+     // ค้นด้วย member_no แบบครอบคลุม: text CM-0002 และ int 2
+     const cmCode=formatMemberNo(mn);
+     r=await supa.from('raw_cards').select('*',{count:'exact'}).or(`customer_member_no.eq.${cmCode},customer_member_no.eq.${mn},customer_member_no.eq.${mn}`).order('created_at',{ascending:false}).range(from,to);
+   }else{
+     r=await supa.from('raw_cards').select('*',{count:'exact'}).or(`id.ilike.%${qUpper}%,customer_member_no.ilike.%${qUpper}%`).order('created_at',{ascending:false}).range(from,to);
+   }
+
+   if(r && r.data && r.data.length){ data=r.data; count=r.count||r.data.length; }
+   else if(r && r.count===0){ data=[]; count=0; }
+
+   // fallback ถ้าไม่เจอใน raw_cards ลองหาใน cards ที่มี raw_photos (8 รูป) ด้วย
+   if(!data||!data.length){
+     if(mn!==null){
+       const {data:cards, count:c2}=await supa.from('cards').select('*',{count:'exact'}).eq('owner_member_no', mn).order('created_at',{ascending:false}).range(from,to);
+       if(cards && cards.length){
+         // แปลง cards เป็น format เดียวกับ raw_cards สำหรับแสดง
+         data=cards.map(card=>{
+           const photos=card.raw_photos||{};
+           const entries=Array.isArray(photos)?photos.map((url,i)=>[i+1,url]):Object.entries(photos);
+           const fakeId=card.qr_code;
+           return { id:fakeId, name:card.title||card.qr_code, customer_member_no:formatMemberNo(card.owner_member_no), status:card.status, r2_folder:null, raw_photos:photos, _isCard:true, created_at:card.created_at, _entries:entries };
+         });
+         count=c2||data.length;
+       }
+     }
+   }
+
+   if(!data||!data.length){
+     document.getElementById('result').innerHTML=`<div class="bg-zinc-900 rounded-2xl p-6 text-center">ไม่พบ ${qFormatted}<br><span class="text-xs opacity-50">ลองกดเทส RAW-050823 หรือ CM-0002</span><br><a href="/admin-add-card" class="mt-3 inline-block bg-yellow-400 text-black px-4 py-2 rounded-full text-xs font-black">ไปถ่ายรูป RAW</a></div>`;
+     document.getElementById('pager').classList.add('hidden');
+     return;
+   }
+
+   totalCount=count;
+   document.getElementById('pager').classList.remove('hidden');
+   document.getElementById('pageInfo').innerText=`หน้า ${currentPage} / ${Math.max(1,Math.ceil(totalCount/PAGE_SIZE))} • ${totalCount} รายการ`;
+   document.getElementById('prevBtn').disabled=currentPage<=1;
+   document.getElementById('nextBtn').disabled=currentPage>=Math.ceil(totalCount/PAGE_SIZE);
+
+   document.getElementById('result').innerHTML=data.map(c=>{
+    if(c._isCard){
+      // แสดงการ์ดจาก cards table 8 รูป
+      const entries=c._entries||[];
+      const grid=entries.map(([k,url])=>{
+        if(!url) return '';
+        const label=k<=10?LABELS_TH[k-1]:`รูป ${k}`;
+        return `<div class="bg-zinc-900 rounded-xl p-2 border border-white/5"><div class="text-[11px] font-bold mb-2">${label}</div><img src="${url}" class="zoom-img w-full h-[180px] object-cover rounded-lg bg-black cursor-pointer" loading="lazy" onclick="openLightbox('${url}')" onerror="this.style.opacity=0.2;this.nextElementSibling.innerText='รูปหาย'"><div class="text-[8px] opacity-20 mt-1 truncate">${url}</div></div>`;
+      }).join('');
+      return `<div class="bg-zinc-900 rounded-2xl p-5 border border-yellow-400/20 mb-4"><div class="flex justify-between"><span class="bg-yellow-400 text-black px-3 py-1 rounded-full text-xs font-bold">${c.id} (จาก cards 8 รูป)</span><span class="bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full text-xs">${c.status}</span></div><div class="mt-3 text-sm font-bold">${c.name}</div><div class="text-xs opacity-60 mt-1">สมาชิก: ${c.customer_member_no}</div><div class="mt-1 text-[11px] text-yellow-400">👆 จิ้มรูปเพื่อดู 4K Lightbox</div><div class="mt-5 grid grid-cols-2 gap-3">${grid}</div><div class="mt-4 flex gap-2"><a href="/card?qr=${c.id}" class="text-[11px] bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full">ดูใน card.html</a></div></div>`;
+    }else{
+      const folder=c.r2_folder||c.id;
+      // ✅ FIXED: encodeURI สำหรับชื่อไฟล์ภาษาไทย
+      const realUrls=FILES_REAL.map(f=>`${R2_PUBLIC}/${folder}/${encodeURIComponent(f)}`);
+      const grid=realUrls.map((url,i)=>`<div class="bg-zinc-900 rounded-xl p-2 border border-white/5"><div class="text-[11px] font-bold mb-2">${LABELS_TH[i]}</div><img src="${url}" class="zoom-img w-full h-[180px] object-cover rounded-lg bg-black cursor-pointer" loading="lazy" onclick="openLightbox('${url}')" onerror="this.style.opacity=0.2;this.nextElementSibling.nextElementSibling.innerText='❌ ไม่พบรูป';this.style.background='#111'"><div class="text-[8px] opacity-20 mt-1 truncate">${url}</div><div class="text-[8px] text-red-400 mt-1"></div></div>`).join('');
+      return `<div class="bg-zinc-900 rounded-2xl p-5 border border-white/5 mb-4"><div class="flex justify-between"><span class="bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full text-xs font-bold">${c.id}</span><span class="bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full text-xs">${c.status}</span></div><div class="mt-3 text-sm font-bold">${c.name}</div><div class="text-xs opacity-60 mt-1">สมาชิก: ${c.customer_member_no} | โฟลเดอร์: ${folder}</div><div class="mt-1 text-[11px] text-yellow-400">👆 จิ้มรูปเพื่อดู 4K Lightbox • จิ้มค้างซูม 2.5x</div><div class="mt-5 grid grid-cols-2 gap-3">${grid}</div><div class="mt-4 flex gap-2"><a href="/my-raw?code=${c.id}" class="text-[11px] bg-zinc-800 px-3 py-1 rounded-full">ลิ้งค์ตรง</a><a href="/admin-add-card?code=${c.id}" class="text-[11px] bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full">ไปหลังบ้าน RAW</a><a href="/card?qr=${c.id.replace('RAW-','')}" class="text-[11px] bg-zinc-800 px-3 py-1 rounded-full">เช็ค QR</a></div></div>`;
+    }
+   }).join('');
+
+ }catch(e){
+   document.getElementById('result').innerHTML=`<div class="bg-red-900/20 border border-red-500/20 rounded-xl p-4 text-[12px] text-red-300">Error: ${e.message}</div>`;
+ }
+}
+document.getElementById('btn').onclick=()=>search(true);
+document.getElementById('q').addEventListener('keydown',e=>{if(e.key==='Enter')search(true);});
+(async()=>{ await checkAuth(); const p=new URLSearchParams(location.search).get('code'); if(p){document.getElementById('q').value=p; search(true);} else if(document.getElementById('q').value){ search(true); } })();
+</script>
+</body>
+</html>

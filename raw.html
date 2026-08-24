@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RAW 4K Studio - Card Matem</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Kanit',sans-serif;background:#08080a;color:white}
+.badge-4k{background:linear-gradient(135deg,#3b82f6,#60a5fa);box-shadow:0 2px 8px rgba(59,130,246,0.25)}
+#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;touch-action:none}
+#lightbox img{max-width:100%;max-height:100%;transform-origin:center center;transition:transform 0.1s}
+.badge-4k{position:relative;overflow:hidden}
+.badge-4k::after{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(120deg,transparent,rgba(255,255,255,0.4),transparent);animation:shineMove 2.2s infinite}
+@keyframes shineMove{0%{left:-100%}60%{left:120%}100%{left:120%}}
+.btn-shine{position:relative;overflow:hidden}
+.btn-shine::after{content:'';position:absolute;top:0;left:-100%;width:70%;height:100%;background:linear-gradient(120deg,transparent,rgba(255,255,255,0.5),transparent);transform:skewX(-15deg);animation:shineMove 2.5s infinite}
+.btn-fire{position:relative;overflow:hidden; background:linear-gradient(135deg,#ef4444,#dc2626,#991b1b) !important; box-shadow:0 4px 15px rgba(239,68,68,0.4), inset 0 1px 1px rgba(255,255,255,0.3) !important; border:1px solid rgba(248,113,113,0.5) !important;}
+.btn-fire::before{content:'🔥';position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:14px;animation:fireMove 1.2s infinite}
+@keyframes fireMove{0%,100%{transform:translateY(-50%) translateX(0) scale(1)}50%{transform:translateY(-50%) translateX(3px) scale(1.15)}}
+.btn-fire span{margin-left:10px}
+.btn-orange-shine{position:relative;overflow:hidden; background:linear-gradient(135deg,#f97316,#ea580c,#c2410c) !important; box-shadow:0 4px 15px rgba(249,115,22,0.4), inset 0 1px 1px rgba(255,255,255,0.3) !important; border:1px solid rgba(251,146,60,0.5) !important;}
+.btn-orange-shine::after{content:'';position:absolute;top:0;left:-100%;width:70%;height:100%;background:linear-gradient(120deg,transparent,rgba(255,255,255,0.4),transparent);transform:skewX(-15deg);animation:shineMove 2.8s infinite}
+</style>
+
+<script>
+// === CM D1/R2 FIX - UI เดิม 100% - แก้เฉพาะโค้ดดึงข้อมูล ===
+// FIXED V3 - using window.CM_R2_API
+const CM_R2_API = window.CM_R2_API || "https://r2-proxy.vasan-jitpim.workers.dev";
+const CM_D1_API = CM_R2_API + "/api";
+async function cmFetchD1(path, fallbackFn){
+  try{
+    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch(CM_D1_API + path, {cache:'no-store', signal: ctrl.signal});
+    if(r.ok){ const j = await r.json(); if(j) return j; }
+  }catch(e){}
+  if(typeof fallbackFn==='function'){ try{ return await fallbackFn(); }catch(e){} }
+  return [];
+}
+async function cmUploadR2(fileOrBlob, fileName, extra={}){
+  try{
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, fileName);
+    for(const k in extra) fd.append(k, extra[k]);
+    const r = await fetch(CM_R2_API, {method:'POST', body: fd});
+    const j = await r.json();
+    return j.url || j.image_url || null;
+  }catch(e){ return null; }
+}
+const CM_ADMIN_EMAIL = "vasan.jitpim@gmail.com";
+const CM_ADMIN_CM = "CM-0000";
+function cmIsAdmin(email, memberNo){
+  const e = (email||"").toLowerCase();
+  const cm = (memberNo||"").toString().toUpperCase();
+  return e===CM_ADMIN_EMAIL || cm===CM_ADMIN_CM || cm==="0" || cm==="CM-0000";
+}
+</script>
+
+</head>
+<body class="bg-[#08080a] min-h-screen">
+<div class="max-w-[720px] mx-auto px-4 py-4">
+
+  <div class="flex justify-between items-center">
+    <a href="https://www.cardmatem.store/" class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-[#facc15] flex items-center justify-center font-black text-[10px] text-black">CM</div><span class="font-black text-[14px]"><span class="text-[#facc15]">Card</span> <span class="text-[#fde68a]">Matem</span></span></a>
+    <div class="flex gap-2 items-center">
+      <span class="badge-4k text-white text-[8px] font-black px-2.5 py-1 rounded-full">4K • 48MP</span>
+      <span id="authBadge" class="text-[8px] bg-zinc-800 border border-white/10 text-zinc-400 px-2.5 py-1 rounded-full">เช็คแอดมิน...</span>
+      <a href="https://www.cardmatem.store/" class="text-[10px] bg-[#1a1a1e] border border-white/10 px-3 py-1.5 rounded-full text-zinc-400">← กลับ</a>
+    </div>
+  </div>
+
+  <div class="mt-5 bg-[#15151a] border border-[#facc15]/15 rounded-[20px] p-5">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="bg-[#facc15] text-black text-[9px] font-black px-2.5 py-1 rounded-full">RAW STUDIO</span>
+      <span class="badge-4k btn-shine text-white text-[8px] font-black px-2 py-1 rounded-full">4K ULTRA HD</span>
+    </div>
+    <h1 class="text-[24px] font-black leading-[1.15]">ถ่าย RAW <span class="text-[#facc15]">ระดับสตูดิโอ</span> <span class="text-blue-400 text-[13px]">4K</span></h1>
+    <p class="text-[11px] text-zinc-400 mt-2 leading-relaxed">ถ่ายคมชัด ไม่แต่งรูป ให้เห็นของจริงก่อนซื้อ - ระบบ 4K 48MP</p>
+    <div class="mt-3 bg-black border border-blue-500/20 rounded-xl p-2.5 flex justify-between items-center">
+      <span class="text-[9px] text-blue-300">SPEC 4K</span><span class="text-[9px] text-white font-bold">48MP 8000x6000 | 4K 3840x2160 | UV 365nm |</span>
+    </div>
+  </div>
+
+  <div class="mt-5 bg-[#15151a] border border-white/[0.06] rounded-[20px] p-4">
+    <h2 class="text-[13px] font-bold text-[#fde68a]">📸 ขั้นตอนถ่าย RAW</h2>
+    <div class="mt-3 space-y-2">
+      <div class="flex gap-2.5"><div class="w-6 h-6 rounded-full bg-[#facc15] text-black flex items-center justify-center text-[10px] font-black shrink-0">1</div><div class="flex-1 bg-[#0f0f12] rounded-xl px-3 py-2"><div class="text-[11px] font-bold text-white">หน้า- หลัง เต็มใบ</div><div class="text-[10px] text-zinc-400">ฉากดำ Softbox 3 ดวง Macro 4K เห็นรอยขนแมว</div></div></div>
+      <div class="flex gap-2.5"><div class="w-6 h-6 rounded-full bg-zinc-700 text-white flex items-center justify-center text-[10px] font-bold shrink-0">2</div><div class="flex-1 bg-[#0f0f12] rounded-xl px-3 py-2"><div class="text-[11px] font-bold text-white">วัด Center - พร้อมคะแนน</div><div class="text-[10px] text-zinc-400">เชค Center ง่าย ตัดสินใจ ขาย หรือ เกรด PSA Japan</div></div></div>
+      <div class="flex gap-2.5"><div class="w-6 h-6 rounded-full bg-[#a78bfa] text-black flex items-center justify-center text-[10px] font-black shrink-0">3</div><div class="flex-1 bg-[#0f0f12] rounded-xl px-3 py-2"><div class="text-[11px] font-bold text-white">UV 365nm - หาจุดขาว</div><div class="text-[10px] text-zinc-400">ส่องมืด เรืองแสงชัด ตำหนิ จุดขาวอยู่หลัง ชัดทุกรอย (ถ้ามี)</div></div></div>
+      <div class="flex gap-2.5"><div class="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] font-black shrink-0">4</div><div class="flex-1 bg-[#0f0f12] rounded-xl px-3 py-2"><div class="text-[11px] font-bold text-white">วงแดง - จริงใจ</div><div class="text-[10px] text-zinc-400">เจอรอย แต่งสี จุดขาว วงแดง ชัดเจน ทั้งหมด ไม่หมกตำหนิ</div></div></div>
+      <div class="flex gap-2.5"><div class="w-6 h-6 rounded-full bg-[#facc15] text-black flex items-center justify-center text-[10px] font-black shrink-0">5</div><div class="flex-1 bg-[#0f0f12] rounded-xl px-3 py-2"><div class="text-[11px] font-bold text-white">QR + Market</div><div class="text-[10px] text-zinc-400">ถ่ายครบ 8 รูป ติด QR Void ลงขาย ซื้อ-ขาย มั่นใจ มีประวัติ</div></div></div>
+    </div>
+  </div>
+
+  <div class="mt-5 bg-[#0f141f] border border-blue-500/20 rounded-[20px] p-4">
+    <div class="flex justify-between items-center">
+      <h2 class="text-[13px] font-bold text-blue-200">🖼️ รูป 4K - 8 ช่อง <span id="countLabel" class="text-[9px] text-zinc-500 ml-2">0/8</span></h2>
+      <span id="adminStatus" class="text-[8px] bg-zinc-800 border border-white/10 text-zinc-500 px-2.5 py-1 rounded-full">ล็อก</span>
+    </div>
+    <div class="mt-3 grid grid-cols-2 gap-3" id="photoGrid"></div>
+    <div class="mt-4 flex gap-2">
+      <button id="saveBtn" onclick="saveDraft()" class="flex-1 bg-black border border-white/10 text-white font-black py-3.5 rounded-xl text-[12px] opacity-50" disabled>🔒 บันทึกร่าง</button>
+      <button id="clearBtn" onclick="clearAll()" class="bg-zinc-900 border border-white/10 text-zinc-400 py-3.5 px-5 rounded-xl text-[11px] opacity-50" disabled>ล้าง</button>
+    </div>
+    <div class="mt-2 text-[8px] text-zinc-600 text-center">รูปจะเซฟลงเครื่องทันทีหลังเลือก • แตะรูปเพื่อขยายดูแบบมือถือ ถ่างนิ้วซูมได้</div>
+  </div>
+
+  <div class="mt-5 grid grid-cols-2 gap-3">
+    <a href="/pregrade" class="btn-fire btn-shine text-white font-black py-4 rounded-xl text-center text-[13px] shadow-lg shadow-red-500/30 flex items-center justify-center gap-1.5 relative overflow-hidden"><span>ส่ง เกรดเลย</span></a>
+    <a href="/psa" class="btn-orange-shine btn-shine text-white font-black py-4 rounded-xl text-center text-[13px] shadow-lg shadow-orange-500/30 relative overflow-hidden">ไป Psa Japan</a>
+  </div>
+
+  <div id="lightbox" onclick="closeLightbox()">
+    <div class="w-full h-full flex items-center justify-center p-4 relative">
+      <button onclick="closeLightbox()" class="absolute top-4 right-4 w-8 h-8 bg-white/10 border border-white/20 rounded-full text-white">×</button>
+      <img id="lightboxImg" src="" />
+    </div>
+  </div>
+
+  <div class="mt-6 text-center text-[9px] text-zinc-600 pb-10">© Card Matem • RAW 4K • Admin vasan.jitpim@gmail.com only •</div>
+</div>
+
+<script>
+const ADMIN_EMAIL="vasan.jitpim@gmail.com";
+let isAdmin=false;
+const SUPABASE_URL="https://mgandefbbgvlfqqzfnoe.supabase.co";
+const ANON_KEY="sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h";
+const supabaseClient = supabase.createClient(SUPABASE_URL, ANON_KEY);
+
+const slots=[
+  {id:1,name:"หน้าเต็มใบ 1 รูป",desc:"4K เต็มใบ"},
+  {id:2,name:"หลังเต็มใบ 1 รูป",desc:"4K หลัง"},
+  {id:3,name:"วัดCenter หน้า",desc:"2 รูป - หน้า"},
+  {id:4,name:"วัดCenter หลัง",desc:"2 รูป - หลัง"},
+  {id:5,name:"UV 365nm - หน้า",desc:"2 รูป - UV หน้า"},
+  {id:6,name:"UV 365nm - หลัง",desc:"2 รูป - UV หลัง"},
+  {id:7,name:"ตำหนิ วงแดง (ถ้ามี)",desc:"2 รูป - หน้า"},
+  {id:8,name:"ตำหนิ วงแดง (ถ้ามี)",desc:"2 รูป - หลัง"}
+];
+
+const grid=document.getElementById('photoGrid');
+let storedImages={};
+
+function loadStored(){
+  try{
+    const s=localStorage.getItem('raw_photos_4k_v2');
+    if(s) storedImages=JSON.parse(s);
+  }catch(e){ storedImages={}; }
+}
+function saveStored(){
+  try{
+    localStorage.setItem('raw_photos_4k_v2', JSON.stringify(storedImages));
+  }catch(e){
+    showModal('พื้นที่เต็ม กรุณาลบรูปเก่าบ้าง');
+  }
+  updateCount();
+}
+function updateCount(){
+  const c=Object.keys(storedImages).length;
+  document.getElementById('countLabel').innerText=c+"/8 รูป";
+}
+
+function renderAll(){
+  grid.innerHTML='';
+  slots.forEach(function(s){
+    const hasImg=storedImages[s.id];
+    const div=document.createElement('div');
+    div.className='bg-[#0f0f12] border border-white/[0.06] rounded-xl p-2.5';
+    // ✅ ทุกคนเห็นรูป + กดดูได้ทุกคน (openLightbox ไม่เช็คแอดมิน) ปุ่มเลือก/ลบเท่านั้นที่ล็อกแอดมิน
+    div.innerHTML='<div class="flex justify-between"><span class="bg-blue-500/20 text-blue-200 text-[8px] px-2 py-0.5 rounded-full">'+s.id+'. '+s.name+'</span><span class="text-[7px] text-zinc-600">'+s.desc+'</span></div><div class="mt-2 aspect-[4/3] bg-black rounded-lg border border-white/5 flex items-center justify-center overflow-hidden relative cursor-zoom-in" onclick="if(storedImages['+s.id+']) openLightbox('+s.id+')">'+(hasImg ? '<img src="'+hasImg+'" class="w-full h-full object-cover">' : '<span class="text-[18px] opacity-20">📷</span>')+'</div><input type="file" accept="image/*" id="file-'+s.id+'" class="hidden" onchange="loadFile('+s.id+',this)"><div class="mt-2 flex gap-1"><button onclick="pick('+s.id+')" class="flex-1 bg-zinc-800 border border-white/5 text-white text-[10px] font-bold py-2 rounded-full">เลือกไฟล์</button><button onclick="clearSlot('+s.id+')" class="w-8 bg-red-500/20 border border-red-500/20 text-red-300 text-[10px] py-2 rounded-full">×</button></div>';
+    grid.appendChild(div);
+  });
+  updateCount();
+}
+
+// ✅ FIXED: ไม่ต้องใส่พาสเวิด เช็คจาก Supabase Auth อีเมล vasan.jitpim@gmail.com คนเดียวเท่านั้น
+async function checkAutoAdmin(){
+  try{
+    const {data:{user}} = await supabaseClient.auth.getUser();
+    const badge=document.getElementById('authBadge');
+    if(user && user.email && user.email.toLowerCase()===ADMIN_EMAIL){
+      isAdmin=true;
+      if(badge){ badge.innerText=user.email.split('@')[0]+' ✅ Admin'; badge.className='text-[8px] bg-emerald-500 text-black px-2.5 py-1 rounded-full font-black'; }
+      updateUI();
+    }else if(user){
+      isAdmin=false;
+      if(badge){ badge.innerText=user.email.split('@')[0]+' (ดูอย่างเดียว)'; badge.className='text-[8px] bg-zinc-700 border border-white/10 text-zinc-300 px-2.5 py-1 rounded-full'; }
+      updateUI();
+    }else{
+      isAdmin=false;
+      if(badge){ badge.innerText='ไม่ได้ล็อกอิน - ดูอย่างเดียว'; badge.className='text-[8px] bg-zinc-800 border border-white/10 text-zinc-500 px-2.5 py-1 rounded-full'; }
+      updateUI();
+    }
+  }catch(e){
+    isAdmin=false;
+    updateUI();
+  }
+}
+
+function updateUI(){
+  const save=document.getElementById('saveBtn');
+  const clear=document.getElementById('clearBtn');
+  const st=document.getElementById('adminStatus');
+  if(isAdmin){
+    save.disabled=false; save.className='flex-1 bg-black border border-white/20 text-white font-black py-3.5 rounded-xl text-[12px]'; save.innerText='💾 บันทึกร่าง (ดำ)';
+    clear.disabled=false; clear.className='bg-zinc-900 border border-white/20 text-white py-3.5 px-5 rounded-xl text-[11px]'; clear.innerText='ล้าง';
+    st.className='text-[8px] bg-green-500/10 border border-green-500/20 text-green-400 px-2.5 py-1 rounded-full'; st.innerText='Admin vasan.jitpim@gmail.com';
+  }else{
+    save.disabled=true; save.className='flex-1 bg-black border border-white/10 text-zinc-600 font-black py-3.5 rounded-xl text-[12px] opacity-50'; save.innerText='🔒 บันทึกร่าง';
+    clear.disabled=true; clear.className='bg-zinc-900 border border-white/10 text-zinc-600 py-3.5 px-5 rounded-xl text-[11px] opacity-50'; clear.innerText='ล้าง';
+    st.className='text-[8px] bg-zinc-800 border border-white/10 text-zinc-500 px-2.5 py-1 rounded-full'; st.innerText='ดูอย่างเดียว - แอดมินเท่านั้นแก้ได้';
+  }
+}
+function pick(id){
+  if(!isAdmin){showModal('ดูอย่างเดียว - แก้ไขได้เฉพาะ Admin vasan.jitpim@gmail.com เท่านั้น (ไม่ต้องใส่พาสเวิด ล็อกอินด้วยอีเมลนี้)'); return;}
+  document.getElementById('file-'+id).click();
+}
+
+// ✅ FIXED บัคขนาดรูป: compress 800px webp ก่อนเซฟ กัน localStorage เต็ม แต่ยังเห็นรูปชัด กดดูได้ทุกคน
+async function compressImage(file){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.src=URL.createObjectURL(file);
+    img.onload=()=>{
+      const maxW=1200;
+      let w=img.width, h=img.height;
+      if(w>maxW){ h*=maxW/w; w=maxW; }
+      const canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      canvas.toBlob((blob)=>{
+        const reader=new FileReader();
+        reader.onload=e=>resolve(e.target.result);
+        reader.readAsDataURL(blob);
+      }, 'image/webp', 0.82);
+    };
+    img.onerror=()=>{
+      const reader=new FileReader();
+      reader.onload=e=>resolve(e.target.result);
+      reader.readAsDataURL(file);
+    };
+  });
+}
+
+async function loadFile(id,input){
+  if(!isAdmin){showModal('Admin vasan.jitpim@gmail.com เท่านั้น'); return;}
+  const file=input.files[0]; if(!file) return;
+  const compressed=await compressImage(file);
+  storedImages[id]=compressed;
+  saveStored();
+  renderAll();
+}
+function clearSlot(id){
+  if(!isAdmin){showModal('ดูอย่างเดียว - Admin vasan.jitpim@gmail.com เท่านั้น'); return;}
+  delete storedImages[id];
+  saveStored();
+  renderAll();
+}
+function clearAll(){
+  if(!isAdmin){showModal('Admin vasan.jitpim@gmail.com เท่านั้น'); return;}
+  if(!showModalConfirm('ล้างรูปทั้งหมด 8 รูป?')) return;
+  storedImages={};
+  saveStored();
+  localStorage.removeItem('raw_photos_4k_v2');
+  renderAll();
+}
+function saveDraft(){
+  if(!isAdmin){showModal('Admin vasan.jitpim@gmail.com เท่านั้น'); return;}
+  const c=Object.keys(storedImages).length;
+  if(c===0){showModal('ยังไม่ได้เลือกรูป'); return;}
+  saveStored();
+  showModal('บันทึกแล้ว '+c+'/8 รูป 4K เซฟในช่องแล้ว');
+  renderAll();
+}
+let currentScale=1, lastDist=0;
+function openLightbox(id){
+  const src=storedImages[id];
+  if(!src) return;
+  document.getElementById('lightboxImg').src=src;
+  document.getElementById('lightbox').style.display='block';
+  currentScale=1;
+  document.getElementById('lightboxImg').style.transform='scale(1)';
+}
+function closeLightbox(){ document.getElementById('lightbox').style.display='none'; }
+const img=document.getElementById('lightboxImg');
+if(img){
+  img.addEventListener('touchstart', function(e){
+    if(e.touches.length===2){
+      lastDist=Math.hypot(e.touches[0].pageX-e.touches[1].pageX, e.touches[0].pageY-e.touches[1].pageY);
+    }
+  });
+  img.addEventListener('touchmove', function(e){
+    if(e.touches.length===2){
+      e.preventDefault();
+      const dist=Math.hypot(e.touches[0].pageX-e.touches[1].pageX, e.touches[0].pageY-e.touches[1].pageY);
+      const scale=(dist/lastDist)*currentScale;
+      img.style.transform='scale('+scale+')';
+    }
+  }, {passive:false});
+  img.addEventListener('touchend', function(e){
+    if(e.touches.length<2){
+      const m=img.style.transform.match(/scale\(([^)]+)\)/);
+      if(m) currentScale=parseFloat(m[1]);
+    }
+  });
+}
+loadStored();
+renderAll();
+updateUI();
+checkAutoAdmin();
+</script>
+
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(confirm(msg) && onOk) onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+
+<script>
+// FIXแว๊ปหาย - restart shine on bfcache like index.html
+(function(){
+  function restartShine(){
+    document.querySelectorAll('.shine-red-beam, .shine-beam, .badge-4k').forEach(el=>{
+      el.style.animation='none';
+      void el.offsetWidth;
+      el.style.animation='';
+    });
+  }
+  window.addEventListener('pageshow', function(){ setTimeout(restartShine, 50); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(restartShine, 50); });
+  window.addEventListener('focus', function(){ setTimeout(restartShine, 50); });
+})();
+</script>
+
+</body>
+</html>

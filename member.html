@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>โปรไฟล์สมาชิก - Card Matem</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Kanit',sans-serif;background:#050507;color:white}
+@media (max-width:640px){button,textarea{font-size:14px!important}}
+</style>
+</head>
+<body class="min-h-screen bg-[#0a0a0f] flex justify-center">
+<div class="w-full max-w-[420px] min-h-screen bg-[#0a0a0f] px-4 py-3 flex flex-col mx-auto">
+  <div class="flex justify-between items-center mb-4">
+    <a href="/" class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-black text-[10px]">CM</div><span class="font-black text-[14px]"><span class="text-yellow-400">Card</span> <span class="text-purple-400">Matem</span></span></a>
+    <a href="/members" class="bg-zinc-800 border border-white/10 text-[10px] px-3 py-1.5 rounded-full">👥 สมาชิกทั้งหมด</a>
+  </div>
+
+  <div class="bg-gradient-to-r from-emerald-900/20 to-[#1e1c24] border border-emerald-500/30 rounded-[12px] p-2 mb-4 flex justify-between items-center">
+    <div class="text-[10px] text-emerald-300 font-bold">V4 • รองรับ CM-0002 และ 2 • รูป R2 8 รูป</div>
+    <div class="text-[8px] bg-emerald-500 text-black px-2 py-0.5 rounded-full font-black">SEQ ON</div>
+  </div>
+
+  <!-- MOBILE: โปรไฟล์อยู่บนสุด -->
+  <div id="profileCard" class="bg-[#16121f] border border-white/10 rounded-[20px] p-5">
+    <div class="text-center text-zinc-500 text-[11px] py-10">กำลังโหลด...</div>
+  </div>
+
+  <!-- MOBILE FIX: ช่องรีวิวอยู่ล่าง ใต้โปรไฟล์ ทันที -->
+  <div id="ratingSection" class="mt-4 bg-[#0f0e15] border border-white/10 rounded-xl p-4">
+    <h3 class="font-bold text-[13px]">⭐ รีวิว <span id="avgRating" class="text-yellow-400"></span></h3>
+    <div id="reviewsList" class="mt-2 space-y-2"><div class="text-[11px] text-zinc-500 text-center py-2">ยังไม่มีรีวิว</div></div>
+    <div id="reviewInputArea" class="mt-3 border-t border-white/10 pt-3">
+      <div id="starPicker" class="flex gap-1 mb-2"><button onclick="setStars(1)">★</button><button onclick="setStars(2)">★</button><button onclick="setStars(3)">★</button><button onclick="setStars(4)">★</button><button onclick="setStars(5)" style="color:#facc15">★</button></div>
+      <textarea id="reviewText" placeholder="เขียนรีวิว..." class="w-full bg-[#1a1625] border border-white/10 rounded-xl px-3 py-2 text-[11px] h-[70px]"></textarea>
+      <button onclick="submitReview(new URLSearchParams(location.search).get('cm')||'CM-0000')" class="mt-2 w-full bg-yellow-400 text-black font-bold py-2 rounded-xl text-[11px]">ส่งรีวิว 5 ดาว</button>
+    </div>
+  </div>
+
+  <!-- การ์ดที่ขายอยู่ ล่างสุด -->
+  <div id="cardsSection" class="mt-6 pb-10">
+    <div class="flex items-center gap-2 mb-3"><span class="text-[14px]">🃏</span><span class="font-bold text-[13px]">การ์ดที่ขายอยู่</span><span id="cardsCountBadge" class="text-[9px] bg-yellow-400 text-black px-2 py-0.5 rounded-full font-black">0 ใบ</span></div>
+    <div id="cardsList" class="grid grid-cols-2 gap-2"><div class="col-span-2 text-center text-zinc-600 text-[11px] py-6">ยังไม่มีการ์ดขาย</div></div>
+  </div>
+
+  <div class="mt-auto pt-6 pb-2 text-center space-y-2">
+    <a href="/members" class="block text-[11px] text-zinc-500 hover:text-white">← กลับหน้าสมาชิกทั้งหมด</a>
+    <a href="/my-account" class="inline-flex items-center gap-1.5 text-[11px] text-yellow-400/80 hover:text-yellow-400 underline underline-offset-4">← กลับหน้า My Account</a>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL='https://mgandefbbgvlfqqzfnoe.supabase.co';
+const ANON='sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+const supabaseClient=window.supabase.createClient(SUPABASE_URL, ANON);
+function formatMemberNo(n){ if(n==null) return 'CM-????'; return 'CM-'+String(n).padStart(4,'0'); }
+function parseMemberNo(input){ if(input==null) return null; const s=String(input).trim().toUpperCase().replace(/^CM-?/,'').trim(); if(!/^\d+$/.test(s)) return null; const num=parseInt(s,10); return isNaN(num)?null:num; }
+function getParam(k){ return new URLSearchParams(window.location.search).get(k); }
+
+async function init(){
+  const cmRaw = getParam('cm');
+  if(!cmRaw){ document.getElementById('profileCard').innerHTML='<div class="text-red-400 text-[12px]">ไม่พบรหัสสมาชิก ?cm=</div>'; return; }
+  const memberNo = parseMemberNo(cmRaw);
+  if(memberNo===null){ document.getElementById('profileCard').innerHTML=`<div class="text-red-400 text-[12px]">รหัสสมาชิกไม่ถูกต้อง: ${cmRaw}</div>`; return; }
+  const {data: c, error} = await supabaseClient.from('customers').select('*').eq('member_no', memberNo).maybeSingle();
+  if(error || !c){ document.getElementById('profileCard').innerHTML=`<div class="text-red-400 text-[12px]">ไม่พบสมาชิก ${formatMemberNo(memberNo)}</div>`; return; }
+  const avatar=c.avatar_url||`https://ui-avatars.com/api/?name=${encodeURIComponent(c.display_name||c.full_name||formatMemberNo(c.member_no))}&background=1e1c24&color=facc15&bold=true&size=128`;
+  let fbBtn = '';
+  if(c.facebook_url){
+    let fbUrl = c.facebook_url.trim(); if(!fbUrl.startsWith('http')) fbUrl='https://'+fbUrl;
+    fbBtn = `<a href="${fbUrl}" target="_blank" class="bg-[#1877F2] text-white px-3 py-1.5 rounded-full text-[11px] font-bold">📘 Facebook</a>`;
+  } else { fbBtn = `<span class="bg-zinc-800 text-zinc-500 px-3 py-1.5 rounded-full text-[11px]">ไม่มี FB</span>`; }
+  let lineBtn = '';
+  if(c.line_id){
+    let raw = c.line_id.trim();
+    if(raw.startsWith('http')){ lineBtn = `<a href="${raw}" target="_blank" class="bg-[#06C755] text-white px-3 py-1.5 rounded-full text-[11px] font-bold">LINE: ${c.line_id}</a>`; }
+    else {
+      let isOfficial = raw.startsWith('@'); let cleanId = raw.replace('@','').trim();
+      let lineUrl = isOfficial ? `https://line.me/R/ti/p/${encodeURIComponent('@'+cleanId)}` : `https://line.me/ti/p/~${encodeURIComponent(cleanId)}`;
+      lineBtn = `<a href="${lineUrl}" target="_blank" class="bg-[#06C755] text-white px-3 py-1.5 rounded-full text-[11px] font-bold">LINE: ${raw}</a>`;
+    }
+  }
+  document.getElementById('profileCard').innerHTML = `
+    <div class="flex flex-col items-center text-center">
+      <img src="${avatar}" class="w-20 h-20 rounded-full object-cover border-2 border-yellow-400/30 mb-3">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="bg-yellow-400 text-black text-[11px] font-black px-2.5 py-0.5 rounded-full">${formatMemberNo(c.member_no)}</span>
+        <span class="font-black text-[16px]">${c.display_name||c.full_name||'สมาชิก'}</span>
+      </div>
+      <div class="text-[10px] text-zinc-500 mb-3">${c.display_name ? c.display_name+' • ' : ''}สมาชิก Card Matem • ${c.created_at?`สมัคร ${new Date(c.created_at).toLocaleDateString('th-TH')}`:''} • ขายแล้ว ${c.sales_count||0} ครั้ง</div>
+      <div class="flex gap-2 flex-wrap justify-center">${fbBtn}${lineBtn}<button onclick="navigator.clipboard.writeText(location.href);showModal('คัดลอกลิงก์แล้ว')" class="bg-zinc-800 border border-white/10 px-3 py-1.5 rounded-full text-[11px]">🔗 แชร์โปรไฟล์</button></div>
+    </div>`;
+
+  // LOCK กันรีวิวตัวเอง - ซ่อนช่องรีวิววงขาวเมื่อดูโปรไฟล์ตัวเอง (MOBILE)
+  try{
+    const {data:{user}} = await supabaseClient.auth.getUser();
+    if(user){
+      const {data: me} = await supabaseClient.from('customers').select('member_no').eq('email', user.email).maybeSingle();
+      if(me && me.member_no === c.member_no){
+        const inputArea = document.getElementById('reviewInputArea');
+        if(inputArea){ inputArea.innerHTML = `<div class="text-[11px] text-zinc-500 text-center py-3 bg-zinc-900/50 rounded-xl border border-white/5">👤 นี่คือโปรไฟล์ของคุณ • ไม่สามารถรีวิวตัวเองได้</div>`; }
+      }
+    }
+  }catch(e){}
+
+  try{
+    const {data: cards, count} = await supabaseClient.from('cards').select('*',{count:'exact'}).eq('owner_member_no', c.member_no).order('created_at',{ascending:false}).limit(20);
+    document.getElementById('cardsCountBadge').innerText=(count||0)+' ใบ';
+    if(cards && cards.length){
+      document.getElementById('cardsList').innerHTML = cards.map(card=>{
+        let imgUrl=''; if(card.raw_photos){ try{ const raw=typeof card.raw_photos==='string'?JSON.parse(card.raw_photos):card.raw_photos; if(Array.isArray(raw) && raw.length) imgUrl=raw[0]; else if(raw.url) imgUrl=raw.url; }catch(e){ imgUrl=card.image_url||card.cover_url||''; } }else{ imgUrl=card.image_url||card.cover_url||''; }
+        return `<a href='/card?qr=${card.qr_code||card.code||''}' class="bg-[#1e1c24] rounded-xl p-2 border border-white/5"><img src="${imgUrl}" class="w-full aspect-[3/4] object-cover rounded-lg bg-zinc-900"><div class="text-[11px] font-bold mt-2 truncate">${card.title||card.name||''}</div><div class="text-[10px] text-yellow-400">฿${(card.price||0).toLocaleString()}</div></a>`;
+      }).join('');
+    }
+  }catch(e){}
+}
+init();
+function sanitizeText(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+let selectedStars=5;
+function setStars(n){selectedStars=n; document.querySelectorAll('#starPicker button').forEach((b,i)=>b.style.color=i<n?'#facc15':'#333');}
+async function submitReview(memberNo){const text=document.getElementById('reviewText').value.trim(); if(!text) return showModal('เขียนรีวิวก่อน'); try{const {data:{user}}=await supabaseClient.auth.getUser(); if(!user) return showModal('ล็อกอินก่อน'); const {data:cust}=await supabaseClient.from('customers').select('member_no').eq('email',user.email).maybeSingle(); const reviewerNo=cust?'CM-'+String(cust.member_no).padStart(4,'0'):'GUEST'; if(reviewerNo===memberNo) return showModal('รีวิวตัวเองไม่ได้'); const {error}=await supabaseClient.from('member_reviews').insert({target_member_no:memberNo, reviewer_member_no:reviewerNo, rating:selectedStars, review_text:text}); if(error) throw error; showModal('ขอบคุณรีวิว'); document.getElementById('reviewText').value=''; loadReviews(memberNo);}catch(e){showModal(e.message);}}
+async function loadReviews(memberNo){const el=document.getElementById('reviewsList'); if(!el) return; try{const {data}=await supabaseClient.from('member_reviews').select('*').eq('target_member_no',memberNo).order('created_at',{ascending:false}).limit(20); if(!data||data.length===0){el.innerHTML='<div class="text-[11px] text-zinc-500 text-center py-2">ยังไม่มีรีวิว</div>'; return;} const avg=data.reduce((s,r)=>s+r.rating,0)/data.length; document.getElementById('avgRating').innerText=`⭐ ${avg.toFixed(1)}/5 (${data.length})`; el.innerHTML=data.map(r=>`<div class="bg-[#16121f] border border-white/5 rounded-lg p-2"><div class="flex justify-between"><span class="text-[10px] font-bold text-yellow-400">${sanitizeText(r.reviewer_member_no)}</span><span class="text-[10px]">${'⭐'.repeat(r.rating)}</span></div><div class="text-[11px] text-zinc-300 mt-1">${sanitizeText(r.review_text)}</div></div>`).join('');}catch(e){}}
+setTimeout(()=>{ const cm=new URLSearchParams(location.search).get('cm')||'CM-0000'; loadReviews(cm); },800);
+</script>
+</body>
+</html>

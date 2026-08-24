@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Backup - Card Matem</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<script>
+const supa = window.supa || (window.getSupa ? window.getSupa() : null); // FIXED V3 singleton
+
+const CM_ADMIN_EMAIL = "vasan.jitpim@gmail.com";
+const CM_ADMIN_CM = "CM-0000";
+function cmIsAdmin(email, memberNo){
+  const e = (email||"").toLowerCase();
+  const cm = (memberNo||"").toString().toUpperCase();
+  return e===CM_ADMIN_EMAIL || cm===CM_ADMIN_CM || cm==="0" || cm==="CM-0000";
+}
+(async function(){
+  try{
+    const {data:{user}} = await supabase.auth.getUser();
+    if(!user || !cmIsAdmin(user.email, '')){
+      document.body.innerHTML = '<div style="padding:40px;text-align:center;color:white;background:#0a0a0f;min-height:100vh"><h2>🔒 เฉพาะแอดมิน</h2><a href="/" style="color:#facc15">กลับหน้าแรก</a></div>';
+    }
+  }catch(e){}
+})();
+</script>
+
+</head><body class="bg-[#050507] text-white p-5"><div class="max-w-[700px] mx-auto"><h1 class="text-[20px] font-black">🛡️ Backup System</h1><div class="mt-4 bg-[#16121f] border border-white/10 rounded-xl p-4"><h3 class="font-bold">📦 Supabase Backup</h3><p class="text-[11px] text-zinc-400 mt-1">สำรอง customers, cards, market_listings, raw_orders, psa_submissions, member_reviews</p><button onclick="backupSupabase()" class="mt-3 w-full bg-emerald-500 text-black font-bold py-2 rounded-xl">⬇️ Backup JSON</button><div id="s1" class="text-[10px] text-zinc-500 mt-2"></div></div><div class="mt-4 bg-[#16121f] border border-yellow-400/20 rounded-xl p-4"><h3 class="font-bold">⏰ Auto Backup Cron - Edge Function</h3><pre class="mt-2 bg-black rounded-lg p-3 text-[9px] overflow-x-auto">import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+serve(async()=>{
+  const supa=createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
+  const tables=['customers','cards','market_listings','raw_orders','psa_submissions','member_reviews','site_settings']
+  const backup={}
+  for(const t of tables){ const {data}=await supa.from(t).select('*'); backup[t]=data }
+  return new Response(JSON.stringify({ok:true, counts:Object.fromEntries(Object.entries(backup).map(([k,v])=>[k,v.length]))}), {headers:{'Content-Type':'application/json'}})
+})
+// Cron: 0 3 * * * ทุกวันตี 3</pre></div><div class="mt-4 bg-yellow-500/10 border border-yellow-400/20 rounded-xl p-3 text-[10px] text-yellow-200">1. เปิด PITR ใน Supabase Dashboard > Backups<br>2. R2 เปิด Versioning + Bucket สำรอง cardmatem-backup</div></div><script>const supa = window.supa || (window.getSupa ? window.getSupa() : null); // FIXED V3 singleton async function backupSupabase(){const el=document.getElementById('s1'); el.innerText='กำลังสำรอง...'; try{const tables=['customers','cards','market_listings','raw_orders','psa_submissions','member_reviews','site_settings']; const backup={}; for(const t of tables){const {data}=await supa.from(t).select('*'); backup[t]=data;} const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`cardmatem-backup-${new Date().toISOString().split('T')[0]}.json`; a.click(); el.innerText=`✅ สำเร็จ ${Object.keys(backup).length} tables`;}catch(e){el.innerText='❌ '+e.message;}}</script></body></html>

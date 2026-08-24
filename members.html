@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>สมาชิกทั้งหมด - Card Matem V4 FIXED</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>body{font-family:'Kanit',sans-serif;background:#050507;color:white}</style>
+
+<script>
+// === CM D1/R2 FIX - UI เดิม 100% - แก้เฉพาะโค้ดดึงข้อมูล ===
+// FIXED V3 - using window.CM_R2_API
+const CM_R2_API = window.CM_R2_API || "https://r2-proxy.vasan-jitpim.workers.dev";
+const CM_D1_API = CM_R2_API + "/api";
+async function cmFetchD1(path, fallbackFn){
+  try{
+    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch(CM_D1_API + path, {cache:'no-store', signal: ctrl.signal});
+    if(r.ok){ const j = await r.json(); if(j) return j; }
+  }catch(e){}
+  if(typeof fallbackFn==='function'){ try{ return await fallbackFn(); }catch(e){} }
+  return [];
+}
+async function cmUploadR2(fileOrBlob, fileName, extra={}){
+  try{
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, fileName);
+    for(const k in extra) fd.append(k, extra[k]);
+    const r = await fetch(CM_R2_API, {method:'POST', body: fd});
+    const j = await r.json();
+    return j.url || j.image_url || null;
+  }catch(e){ return null; }
+}
+const CM_ADMIN_EMAIL = "vasan.jitpim@gmail.com";
+const CM_ADMIN_CM = "CM-0000";
+function cmSafe(t){const d=document.createElement("div");d.textContent=t;return d.innerHTML;}
+
+function cmIsAdmin(email, memberNo){
+  const e = (email||"").toLowerCase();
+  const cm = (memberNo||"").toString().toUpperCase();
+  return e===CM_ADMIN_EMAIL || cm===CM_ADMIN_CM || cm==="0" || cm==="CM-0000";
+}
+</script>
+
+</head>
+<body class="bg-[#0a0a0f] min-h-screen flex justify-center">
+<div class="w-full max-w-[420px] min-h-screen mx-auto bg-[#0a0a0f] px-5 py-4">
+<a href="/" class="flex items-center gap-2 mb-4"><div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-black text-[10px]">CM</div><span class="font-black text-[14px]"><span class="text-yellow-400">Card</span> <span class="text-purple-400">Matem</span></span></a>
+
+<div class="bg-gradient-to-r from-emerald-900/20 to-[#1e1c24] border border-emerald-500/30 rounded-[12px] p-2.5 mb-3 flex justify-between items-center">
+  <div class="text-[10px] text-emerald-300 font-bold">V4 FIXED • Pagination 50 • กัน CM-ซ้ำ • Sequence ON</div>
+  <div id="totalBadge" class="text-[9px] bg-emerald-500 text-black px-2 py-0.5 rounded-full font-black">0 คน</div>
+</div>
+
+<h1 class="text-[18px] font-black mb-1">สมาชิกทั้งหมด</h1>
+<div class="bg-yellow-500/10 border-l-4 border-yellow-400 p-2.5 rounded-r-xl text-[10px] text-yellow-200/80 mb-3">Raw ฟรี 10 ใบ/คน 15 วัน | QR ไม่จำกัด ไม่ลบ • Host 0 บาท 20 วันลบ Auto</div>
+<p class="text-[11px] text-zinc-500 mb-3">กดที่การ์ดเพื่อดูโปรไฟล์ + รีวิว + การ์ดที่ขาย • รองรับ 10k+</p>
+
+<div class="bg-[#16121f] border border-white/10 rounded-2xl p-3 mb-3 flex gap-2">
+  <input id="searchBox" oninput="onSearch()" placeholder="ค้นหา CM-0002 / ชื่อ / ชื่อเล่น" class="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-[12px] outline-none">
+  <button onclick="clearSearch()" class="bg-zinc-800 border border-white/10 text-[10px] px-3 rounded-full">ล้าง</button>
+</div>
+
+<div id="list" class="space-y-2"><div class="text-center text-zinc-500 text-[11px] py-10">กำลังโหลด...</div></div>
+
+<div class="flex justify-between items-center mt-4">
+  <button id="prevBtn" onclick="prevPage()" class="bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] disabled:opacity-30">ก่อนหน้า</button>
+  <span id="pageInfo" class="text-[11px] text-zinc-400">หน้า 1 / 1</span>
+  <button id="nextBtn" onclick="nextPage()" class="bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] disabled:opacity-30">ถัดไป</button>
+</div>
+
+<!-- MOBILE FIX: ช่องรีวิวอยู่ล่างใต้โปรไฟล์/ลิสต์ -->
+<div id="ratingSection" class="mt-6 bg-[#0f0e15] border border-white/10 rounded-xl p-4 w-full">
+<h3 class="font-bold text-[13px]">⭐ รีวิว <span id="avgRating" class="text-yellow-400"></span></h3>
+<div id="reviewsList" class="mt-2 space-y-2"></div>
+<div class="mt-3 border-t border-white/10 pt-3">
+<div id="starPicker" class="flex gap-1 mb-2"><button onclick="setStars(1)">★</button><button onclick="setStars(2)">★</button><button onclick="setStars(3)">★</button><button onclick="setStars(4)">★</button><button onclick="setStars(5)" style="color:#facc15">★</button></div>
+<textarea id="reviewText" placeholder="เขียนรีวิว..." class="w-full bg-[#1a1625] border border-white/10 rounded-xl px-3 py-2 text-[11px] h-[70px]"></textarea>
+<button onclick="submitReview(new URLSearchParams(location.search).get('cm')||'CM-0000')" class="mt-2 w-full bg-yellow-400 text-black font-bold py-2 rounded-xl text-[11px]">ส่งรีวิว 5 ดาว</button>
+</div></div>
+
+<div class="text-center text-[9px] text-zinc-600 mt-6">V4 • 50 คน/หน้า • ค้นหาบนเซิร์ฟเวอร์ • Sequence กันซ้ำ CM-0003+</div>
+</div>
+<script>
+const SUPABASE_URL=localStorage.getItem('SUPABASE_URL') || 'https://mgandefbbgvlfqqzfnoe.supabase.co';
+const ANON=localStorage.getItem('SUPABASE_KEY') || 'sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+const supabaseClient=window.supabase.createClient(SUPABASE_URL, ANON);
+const PAGE_SIZE=50;
+let currentPage=1, totalCount=0, searchQuery='';
+
+function formatMemberNo(n){ if(n==null) return 'CM-????'; return 'CM-'+String(n).padStart(4,'0'); }
+function parseMemberNo(input){ if(!input) return null; const s=String(input).trim().toUpperCase().replace(/^CM-?/,'').trim(); if(!/^\d+$/.test(s)) return null; const num=parseInt(s,10); return isNaN(num)?null:num; }
+
+function onSearch(){ searchQuery=document.getElementById('searchBox').value.trim(); currentPage=1; init(); }
+function clearSearch(){ document.getElementById('searchBox').value=''; searchQuery=''; currentPage=1; init(); }
+
+async function init(){
+  const from=(currentPage-1)*PAGE_SIZE, to=from+PAGE_SIZE-1;
+  let query=supabaseClient.from('customers').select('*',{count:'exact'}).order('member_no',{ascending:true}).range(from,to);
+  if(searchQuery){
+    const mn=parseMemberNo(searchQuery);
+    if(mn!==null){
+      query=supabaseClient.from('customers').select('*',{count:'exact'}).eq('member_no', mn).range(0,PAGE_SIZE-1);
+    }else{
+      const p=`%${searchQuery}%`;
+      query=supabaseClient.from('customers').select('*',{count:'exact'}).or(`display_name.ilike.${p},full_name.ilike.${p}`).order('member_no').range(from,to);
+    }
+  }
+  const {data: customers, count, error}=await query;
+  if(error){ document.getElementById('list').innerHTML=`<div class="text-red-400 text-[11px]">${error.message}</div>`; return; }
+  totalCount=count||0;
+  document.getElementById('totalBadge').innerText=totalCount+' คน';
+  document.getElementById('pageInfo').innerText=`หน้า ${currentPage} / ${Math.max(1,Math.ceil(totalCount/PAGE_SIZE))}`;
+  document.getElementById('prevBtn').disabled=currentPage<=1;
+  document.getElementById('nextBtn').disabled=currentPage>=Math.ceil(totalCount/PAGE_SIZE);
+
+  let quotaMap={};
+  try{
+    const {data: listings} = await supabaseClient.from('market_listings').select('seller_member_no,has_qr,status').eq('status','active');
+    (listings||[]).forEach(l=>{
+      if(!quotaMap[l.seller_member_no]) quotaMap[l.seller_member_no]={raw:0,qr:0};
+      if(l.has_qr) quotaMap[l.seller_member_no].qr++; else quotaMap[l.seller_member_no].raw++;
+    });
+  }catch(e){}
+
+  let map={};
+  if((customers||[]).length){
+    const memberNos=customers.map(c=>c.member_no);
+    const {data: reviews}=await supabaseClient.from('member_reviews').select('to_member_no, stars').in('to_member_no', memberNos);
+    (reviews||[]).forEach(r=>{ if(!map[r.to_member_no]) map[r.to_member_no]={c:0,sum:0}; map[r.to_member_no].c++; map[r.to_member_no].sum+=r.stars; });
+  }
+
+  if(!customers||!customers.length){ document.getElementById('list').innerHTML='<div class="text-center text-zinc-500 py-10 text-[11px]">ไม่พบสมาชิก<br>ลองค้นหาคำอื่น</div>'; return; }
+
+  document.getElementById('list').innerHTML=customers.map(c=>{
+    const stat=map[c.member_no];
+    const avg=stat? (stat.sum/stat.c).toFixed(1):'0.0';
+    const cnt=stat? stat.c:0;
+    const avatar=c.avatar_url||`https://ui-avatars.com/api/?name=${encodeURIComponent(c.display_name||c.full_name||formatMemberNo(c.member_no))}&background=1e1c24&color=facc15&bold=true&size=64`;
+    const q = quotaMap[c.member_no] || {raw:0,qr:0};
+    return `<a href="/member?cm=${c.member_no}"  class="flex gap-3 bg-[#16121f] border border-white/10 rounded-2xl p-3 hover:border-yellow-400/30 transition">
+      <img src="${avatar}" class="w-12 h-12 rounded-full object-cover border border-white/10 flex-shrink-0">
+      <div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="bg-yellow-400 text-black text-[9px] font-black px-2 py-0.5 rounded-full">${formatMemberNo(c.member_no)}</span><span class="font-bold text-[13px] truncate">${(c.display_name||c.full_name||'สมาชิก').substring(0,20)}</span></div><div class="text-[9px] mt-1 flex gap-1"><span class="bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded-full">Raw ${q.raw}/10</span><span class="bg-green-500/20 text-green-300 px-1.5 py-0.5 rounded-full">QR ${q.qr}/ไม่จำกัด</span></div><div class="text-[10px] text-zinc-400 mt-1">⭐ ${avg} (${cnt} รีวิว)</div></div><div class="text-[10px] text-zinc-500 self-center flex-shrink-0">ดูโปรไฟล์ →</div>
+    </a>`;
+  }).join('');
+}
+function prevPage(){ if(currentPage>1){ currentPage--; init(); window.scrollTo({top:0,behavior:'smooth'});} }
+function nextPage(){ if(currentPage<Math.ceil(totalCount/PAGE_SIZE)){ currentPage++; init(); window.scrollTo({top:0,behavior:'smooth'});} }
+init();
+</script>
+<script>
+function sanitizeText(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+let selectedStars=5;
+function setStars(n){selectedStars=n; document.querySelectorAll('#starPicker button').forEach((b,i)=>b.style.color=i<n?'#facc15':'#333');}
+async function submitReview(memberNo){const text=document.getElementById('reviewText').value.trim(); if(!text) return showModal('เขียนรีวิวก่อน'); try{const {data:{user}}=await supabaseClient.auth.getUser(); if(!user) return showModal('ล็อกอินก่อน'); const {data:cust}=await supabaseClient.from('customers').select('member_no').eq('email',user.email).maybeSingle(); const reviewerNo=cust?'CM-'+String(cust.member_no).padStart(4,'0'):'GUEST'; if(reviewerNo===memberNo) return showModal('รีวิวตัวเองไม่ได้'); const {error}=await supabaseClient.from('member_reviews').insert({target_member_no:memberNo, reviewer_member_no:reviewerNo, rating:selectedStars, review_text:text}); if(error) throw error; showModal('ขอบคุณรีวิว'); document.getElementById('reviewText').value=''; loadReviews(memberNo);}catch(e){showModal(e.message);}}
+async function loadReviews(memberNo){const el=document.getElementById('reviewsList'); if(!el) return; try{const {data}=await supabaseClient.from('member_reviews').select('*').eq('target_member_no',memberNo).order('created_at',{ascending:false}).limit(20); if(!data||data.length===0){el.innerHTML='<div class="text-[11px] text-zinc-500 text-center py-2">ยังไม่มีรีวิว</div>'; return;} const avg=data.reduce((s,r)=>s+r.rating,0)/data.length; document.getElementById('avgRating').innerText=`⭐ ${avg.toFixed(1)}/5 (${data.length})`; el.innerHTML=data.map(r=>`<div class="bg-[#16121f] border border-white/5 rounded-lg p-2"><div class="flex justify-between"><span class="text-[10px] font-bold text-yellow-400">${sanitizeText(r.reviewer_member_no)}</span><span class="text-[10px]">${'⭐'.repeat(r.rating)}</span></div><div class="text-[11px] text-zinc-300 mt-1">${sanitizeText(r.review_text)}</div></div>`).join('');}catch(e){}}
+setTimeout(()=>{ const cm=new URLSearchParams(location.search).get('cm')||'CM-0000'; loadReviews(cm); },1000);
+</script>
+</body>
+</html>

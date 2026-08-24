@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADMIN VAULT - ทับไฟล์เก่า หายไม่เหลือซาก</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<style>body{background:#0a0a0a} .glass{background:rgba(20,20,20,0.9);border:1px solid #333}</style>
+</head>
+<body class="text-white min-h-screen">
+<div id="lockScreen" class="min-h-screen flex items-center justify-center p-6">
+<div class="glass rounded-[2rem] p-8 max-w-md w-full text-center border-white/20 border">
+<div class="text-4xl mb-3">🔐</div>
+<h1 class="text-xl font-bold">ADMIN VAULT - ทับไฟล์</h1>
+<p class="text-zinc-500 text-xs mt-1">CM-0000 / vasan.jitpim@gmail.com เท่านั้น</p>
+<div id="authInfo" class="mt-3 bg-zinc-900 rounded-xl p-2 text-[11px] text-left">
+<div id="authEmail">เช็ค login...</div>
+<div id="authMember"></div>
+</div>
+<input id="vaultPass" type="password" placeholder="รหัสชั้น 2" class="mt-3 w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-center tracking-widest focus:border-yellow-500 outline-none">
+<button onclick="unlock()" class="mt-3 w-full bg-yellow-500 text-black font-bold py-2.5 rounded-xl">🔓 ปลดล็อค</button>
+<p id="lockMsg" class="text-red-400 text-xs mt-2 hidden"></p>
+</div>
+</div>
+
+<div id="vaultScreen" class="hidden p-6 max-w-5xl mx-auto">
+<div class="flex justify-between items-center mb-4">
+<h1 class="text-xl font-bold">📦 คลังไฟล์ - อัพใหม่ทับเก่า หายเกลี้ยง</h1>
+<button onclick="lock()" class="text-xs bg-zinc-800 px-3 py-1 rounded-full">🔒 ล็อค</button>
+</div>
+
+<div class="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4 text-xs">
+<b class="text-yellow-400">🔁 ระบบทับไฟล์:</b> อัพไฟล์ชื่อเดิม <code class="bg-black px-1 rounded">index.html</code> ทับ <code class="bg-black px-1 rounded">index.html</code> เก่า → ไฟล์เก่าหายทันที ไม่เหลือซาก ไม่เปลืองพื้นที่
+</div>
+
+<div class="grid md:grid-cols-3 gap-4 mb-6">
+<div class="glass rounded-2xl p-4">
+<h3 class="font-bold text-yellow-400 text-sm">⬆️ อัพโหลด (ทับทันที)</h3>
+<input type="file" id="uploadFiles" multiple class="mt-2 w-full text-xs bg-zinc-900 border border-zinc-700 rounded-lg p-2">
+<input id="uploadFolder" value="Final" class="mt-2 w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm" placeholder="โฟลเดอร์">
+<label class="flex items-center gap-2 mt-2 text-[11px]"><input type="checkbox" id="overwriteCheck" checked class="accent-yellow-500"> <span>ทับไฟล์เก่าชื่อเดียวกันทันที</span></label>
+<button onclick="doUploadOverwrite()" class="mt-3 w-full bg-yellow-500 text-black font-bold py-2 rounded-lg text-sm">🔁 อัพโหลด + ทับไฟล์เก่า</button>
+<div id="uploadStatus" class="text-xs mt-2 text-zinc-400"></div>
+</div>
+
+<div class="glass rounded-2xl p-4">
+<h3 class="font-bold text-green-400 text-sm">📥 ดาวน์โหลด</h3>
+<button onclick="downloadAllList()" class="mt-2 w-full bg-green-600 text-white font-bold py-2 rounded-lg text-xs">📦 โหลดที่เลือกทั้งหมด</button>
+<div id="quickLinks" class="mt-3 text-[11px] space-y-1 max-h-40 overflow-auto"></div>
+</div>
+
+<div class="glass rounded-2xl p-4">
+<h3 class="font-bold text-sm">🗑️ ล้างซาก</h3>
+<p class="text-[11px] text-zinc-400 mt-1">ไฟล์เก่าที่มี timestamp จะถูกลบออกเมื่ออัพชื่อเดิม</p>
+<button onclick="cleanOldVersions()" class="mt-3 w-full bg-red-900/30 border border-red-700 text-red-300 py-2 rounded-lg text-xs">🧹 ล้างไฟล์ซ้ำทั้งหมด</button>
+<div id="cleanStatus" class="text-[10px] mt-2 text-zinc-500"></div>
+</div>
+</div>
+
+<div class="glass rounded-2xl p-4">
+<div class="flex justify-between items-center mb-3">
+<h3 class="font-bold text-sm">📁 ไฟล์ใน Vault (ชื่อจริง ไม่มี timestamp)</h3>
+<button onclick="loadFiles()" class="text-xs bg-zinc-800 px-3 py-1 rounded-full">🔄 รีเฟรช</button>
+</div>
+<div id="fileList" class="space-y-1.5 max-h-[60vh] overflow-auto"></div>
+</div>
+</div>
+
+<script>
+const ALLOWED_EMAIL="vasan.jitpim@gmail.com";
+const ALLOWED_MEMBER="CM-0000";
+const VAULT_PASSWORD="vj119229";
+const BUCKET="admin-vault";
+let supaClient=null;
+function getSupa(){
+ if(supaClient) return supaClient;
+ if(window.supabaseClient) supaClient=window.supabaseClient;
+ else if(window.supa) supaClient=window.supa;
+ else if(window.supabase && window.supabase.auth) supaClient=window.supabase;
+ return supaClient;
+}
+async function getCurrentUser(){
+ const sb=getSupa(); if(!sb) return null;
+ try{ const {data}=await sb.auth.getUser(); return data?.user||null; }catch(e){return null;}
+}
+async function checkAccess(){
+ const emailDiv=document.getElementById('authEmail');
+ const memberDiv=document.getElementById('authMember');
+ const user=await getCurrentUser();
+ let email=user?.email||'';
+ if(!email){
+   const keys=['user_email','email','supabase_email','cm_email','userEmail','current_user_email'];
+   for(const k of keys){ const v=localStorage.getItem(k); if(v && v.includes('@')){ email=v; break; } }
+ }
+ if(!email){
+   for(let i=0;i<localStorage.length;i++){
+     const k=localStorage.key(i); const v=localStorage.getItem(k)||'';
+     if(v.includes('@') && v.toLowerCase().includes('vasan')){ email=v; break; }
+   }
+ }
+ let member=localStorage.getItem('member_id')||localStorage.getItem('memberId')||localStorage.getItem('cm_member_id')||localStorage.getItem('cm_member')||localStorage.getItem('user_member_id')||'';
+ if(!member){
+   for(let i=0;i<localStorage.length;i++){
+     const v=localStorage.getItem(localStorage.key(i))||'';
+     if(v.startsWith('CM-') || v==='CM-0000' || v==='0'){
+       member=v; break;
+     }
+   }
+ }
+ if(window.getCurrentUserEmail) try{ const e=window.getCurrentUserEmail(); if(e) email=e; }catch(e){}
+ if(window.getCurrentMemberId) try{ const m=window.getCurrentMemberId(); if(m) member=m; }catch(e){}
+
+ if(email.toLowerCase()===ALLOWED_EMAIL.toLowerCase()){
+   if(!member || member===''){ 
+     member=ALLOWED_MEMBER; 
+     try{ localStorage.setItem('member_id', ALLOWED_MEMBER); }catch(e){}
+   }
+ }
+
+ emailDiv.textContent='Email: '+(email||'ยังไม่ได้ login');
+ memberDiv.textContent='Member: '+(member||'CM-0000 (auto)')+' - '+(email.toLowerCase()===ALLOWED_EMAIL.toLowerCase() ? 'ผ่าน' : 'ไม่ผ่าน');
+
+ if(!email){ 
+   emailDiv.innerHTML='<span class="text-yellow-400">ไป login ที่ /admin ก่อน แล้วกลับมา</span><br><span class="text-[10px] text-zinc-500">เจอ email: '+(email||'ไม่เจอ')+' - ลองกดรีเฟรช</span>'; 
+   return false; 
+ }
+ const isEmailAllowed = email.toLowerCase()===ALLOWED_EMAIL.toLowerCase();
+ return isEmailAllowed;
+}
+
+async function unlock(){
+ const p=document.getElementById('vaultPass').value;
+ const msg=document.getElementById('lockMsg');
+ const ok=await checkAccess();
+ if(!ok){ msg.textContent='❌ ต้อง CM-0000 / vasan.jitpim@gmail.com'; msg.classList.remove('hidden'); return; }
+ if(p!==VAULT_PASSWORD){ msg.textContent='❌ รหัสชั้น 2 ผิด'; msg.classList.remove('hidden'); return; }
+ document.getElementById('lockScreen').classList.add('hidden');
+ document.getElementById('vaultScreen').classList.remove('hidden');
+ localStorage.setItem('vault_unlocked','1');
+ loadFiles();
+}
+function lock(){ document.getElementById('vaultScreen').classList.add('hidden'); document.getElementById('lockScreen').classList.remove('hidden'); document.getElementById('vaultPass').value=''; localStorage.removeItem('vault_unlocked'); }
+(async()=>{ const ok=await checkAccess(); if(localStorage.getItem('vault_unlocked')==='1'&&ok){ document.getElementById('vaultPass').value=VAULT_PASSWORD; }})();
+document.getElementById('vaultPass').addEventListener('keydown', e=>{ if(e.key==='Enter') unlock(); });
+
+// === ระบบทับไฟล์ หายไม่เหลือซาก ===
+async function doUploadOverwrite(){
+ const sb=getSupa();
+ const files=document.getElementById('uploadFiles').files;
+ const folder=document.getElementById('uploadFolder').value.trim()||'Final';
+ const overwrite=document.getElementById('overwriteCheck').checked;
+ const status=document.getElementById('uploadStatus');
+ if(!sb){ status.textContent='❌ ไม่เจอ Supabase client'; return; }
+ if(files.length===0){ status.textContent='เลือกไฟล์ก่อน'; return; }
+ status.textContent=`กำลังอัพ ${files.length} ไฟล์ (โหมดทับ)...`;
+
+ let success=0;
+ for(const f of files){
+   const baseName=f.name; // ชื่อจริง
+   const targetPath=`${folder}/${baseName}`; // ไม่ใส่ timestamp -> ทับเลย
+
+   try{
+     if(overwrite){
+       // 1. หาไฟล์เก่าที่ชื่อเดียวกันหรือมี timestamp ต่อท้ายชื่อเดียวกัน แล้วลบให้หมด
+       const {data: existing} = await sb.storage.from(BUCKET).list(folder, {limit:1000});
+       if(existing){
+         const toDelete = existing.filter(item=>{
+           // ถ้าชื่อตรงกันเป๊ะ หรือ ลงท้ายด้วย _baseName หรือ มี baseName อยู่ข้างใน
+           return item.name===baseName || item.name.endsWith('_'+baseName) || item.name===targetPath.split('/').pop();
+         }).map(item=> `${folder}/${item.name}`);
+         // ลบไฟล์ซ้ำทั้งหมดก่อน
+         if(toDelete.length>0){
+           await sb.storage.from(BUCKET).remove(toDelete);
+         }
+       }
+     }
+     // 2. อัพไฟล์ใหม่ทับเลยด้วย upsert:true
+     const {error} = await sb.storage.from(BUCKET).upload(targetPath, f, {upsert:true, contentType: f.type||'text/html'});
+     if(error) throw error;
+     success++;
+   }catch(err){
+     status.innerHTML=`❌ ${baseName}: ${err.message}`;
+     return;
+   }
+ }
+ status.innerHTML=`✅ อัพ ${success} ไฟล์เสร็จ - ทับไฟล์เก่าแล้ว <br><span class="text-[10px] text-green-400">ไฟล์เก่าหายเกลี้ยง ไม่เหลือซาก</span>`;
+ loadFiles();
+}
+
+async function loadFiles(){
+ const sb=getSupa();
+ const list=document.getElementById('fileList');
+ const quick=document.getElementById('quickLinks');
+ if(!sb){ list.innerHTML='ไม่เจอ Supabase'; return; }
+ list.innerHTML='<div class="text-xs text-zinc-500">โหลด...</div>';
+ try{
+   const folders=['Final','Final+Common','Tools',''];
+   let allFiles=[];
+   for(const fd of folders){
+     const {data} = await sb.storage.from(BUCKET).list(fd||'', {limit:1000, sortBy:{column:'created_at', order:'desc'}});
+     if(data) data.forEach(it=>{ if(!it.name.endsWith('/')) allFiles.push({folder:fd, ...it, fullPath: fd ? `${fd}/${it.name}` : it.name}); });
+   }
+   // dedupe - เก็บเฉพาะไฟล์ล่าสุดของแต่ละ baseName
+   const map={};
+   allFiles.forEach(f=>{
+     const base=f.name.includes('_') && f.name.match(/\d{13}_(.*)/) ? f.name.replace(/^\d+_/, '') : f.name;
+     const key=`${f.folder}/${base}`;
+     if(!map[key] || new Date(f.created_at) > new Date(map[key].created_at)) map[key]=f;
+   });
+   const unique=Object.values(map).sort((a,b)=> new Date(b.created_at)-new Date(a.created_at));
+   
+   if(unique.length===0){ list.innerHTML='<div class="text-xs text-zinc-500 p-3 bg-zinc-900 rounded">ยังไม่มีไฟล์</div>'; return; }
+   list.innerHTML='';
+   quick.innerHTML='';
+   unique.forEach(f=>{
+     const base=f.name.replace(/^\d+_/, '');
+     const div=document.createElement('div');
+     div.className='flex justify-between items-center bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm';
+     const size=f.metadata?.size ? (f.metadata.size>1024? (f.metadata.size/1024/1024).toFixed(2)+' MB' : (f.metadata.size/1024).toFixed(1)+' KB') : '';
+     div.innerHTML=`<div class="flex-1 min-w-0"><div class="font-medium text-[12px] truncate">${base} <span class="text-[10px] text-zinc-500">(${f.folder})</span></div><div class="text-[10px] text-zinc-500">${size} • ${new Date(f.created_at).toLocaleString('th-TH')}</div></div><div class="flex gap-1 ml-2"><button onclick="downloadFile('${f.fullPath}')" class="bg-zinc-800 px-2.5 py-1 rounded-full text-[11px]">⬇️</button><button onclick="deleteFile('${f.fullPath}')" class="bg-red-900/30 px-2 py-1 rounded-full text-[11px]">🗑️</button></div>`;
+     list.appendChild(div);
+     const q=document.createElement('div'); q.innerHTML=`<a href="#" onclick="downloadFile('${f.fullPath}'); return false;" class="text-blue-400 hover:underline truncate block">${base}</a>`; quick.appendChild(q);
+   });
+ }catch(err){
+   list.innerHTML=`<div class="text-xs text-red-400">❌ ${err.message}</div>`;
+ }
+}
+
+async function downloadFile(path){
+ const sb=getSupa();
+ try{
+   const {data, error}=await sb.storage.from(BUCKET).download(path);
+   if(error) throw error;
+   const url=URL.createObjectURL(data);
+   const a=document.createElement('a'); a.href=url; a.download=path.split('/').pop().replace(/^\d+_/, ''); a.click(); URL.revokeObjectURL(url);
+ }catch(err){ alert(err.message); }
+}
+async function deleteFile(path){
+ if(!confirm('ลบถาวร '+path+' ? หายเกลี้ยงนะ')) return;
+ const sb=getSupa();
+ const {error}=await sb.storage.from(BUCKET).remove([path]);
+ if(error) alert(error.message); else loadFiles();
+}
+
+async function cleanOldVersions(){
+ const sb=getSupa();
+ const status=document.getElementById('cleanStatus');
+ status.textContent='กำลังสแกนหาไฟล์ซ้ำ...';
+ try{
+   const {data} = await sb.storage.from(BUCKET).list('Final', {limit:1000});
+   if(!data){ status.textContent='ไม่พบไฟล์'; return; }
+   // หาไฟล์ที่มี _ และชื่อซ้ำ
+   const groups={};
+   data.forEach(f=>{
+     const base=f.name.replace(/^\d+_/, '');
+     if(!groups[base]) groups[base]=[];
+     groups[base].push(f);
+   });
+   let toDelete=[];
+   Object.values(groups).forEach(arr=>{
+     if(arr.length>1){
+       // เก็บไฟล์ล่าสุดไว้ ลบที่เหลือ
+       arr.sort((a,b)=> new Date(b.created_at)-new Date(a.created_at));
+       toDelete.push(...arr.slice(1).map(x=>'Final/'+x.name));
+     }
+   });
+   if(toDelete.length===0){ status.textContent='✅ ไม่มีไฟล์ซ้ำแล้ว สะอาดดี'; return; }
+   if(!confirm(`พบไฟล์ซ้ำ ${toDelete.length} ไฟล์ จะลบให้เหลือแค่ไฟล์ล่าสุดต่อชื่อ?`)) return;
+   const {error}=await sb.storage.from(BUCKET).remove(toDelete);
+   if(error) throw error;
+   status.textContent=`✅ ล้างซากแล้ว ${toDelete.length} ไฟล์ หายเกลี้ยง`;
+   loadFiles();
+ }catch(err){ status.textContent='❌ '+err.message; }
+}
+
+function downloadAllList(){ alert('กด ⬇️ ทีละไฟล์ได้เลย - ไฟล์เก่าถูกทับหายแล้ว ไม่เปลืองที่'); }
+</script>
+</body>
+</html>

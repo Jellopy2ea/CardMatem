@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>ออเดอร์พรีเกรดของฉัน - V4 FIXED</title><script src="https://cdn.tailwindcss.com"></script><script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<style>body{font-family:'Kanit',sans-serif}</style>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head><body class="bg-[#050507] text-white min-h-screen"><div class="max-w-[600px] mx-auto p-5">
+<div class="flex justify-between py-4"><a href="https://www.cardmatem.store/" class="text-sm opacity-60">← กลับหน้าแรก</a><div class="flex gap-2 text-[10px]"><a href="/pregrade" class="bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full">+ สั่งใหม่</a><a href="/my-raw" class="bg-zinc-800 px-3 py-1 rounded-full">ดู RAW</a><a href="/my-account" class="bg-zinc-800 border border-white/10 px-3 py-1 rounded-full">👤 My Acc</a></div></div>
+
+<div class="bg-gradient-to-r from-emerald-900/20 to-zinc-900 border border-emerald-500/30 rounded-xl p-2.5 mb-4 flex justify-between">
+  <div class="text-[10px] text-emerald-300 font-bold">✅ V4 FIXED • Auth check • รองรับ CM-0002 และ 2 • Pagination</div>
+  <div id="authBadge" class="text-[9px] bg-zinc-800 px-2 py-0.5 rounded-full">กำลังเช็ค...</div>
+</div>
+
+<h1 class="text-2xl font-black">📦 ออเดอร์พรีเกรดของฉัน</h1><p class="text-[11px] opacity-50 mt-1">ข้อ 8: ส่งพัสดุ JT/Kerry/Flash/ปณ. • ข้อ 9-10: ติดตามจนจบ • Sequence กันซ้ำ</p>
+<div class="mt-4 flex gap-2"><input id="q" placeholder="CM-0002 หรือ 2" class="flex-1 bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 text-sm outline-none"><button id="btn" class="bg-yellow-400 text-black font-black px-6 rounded-xl text-sm">ดูออเดอร์</button></div>
+
+<div id="result" class="mt-6 space-y-4"></div>
+<div id="shipModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-5 z-50"><div class="bg-zinc-900 rounded-2xl p-5 w-full max-w-[400px] border border-white/10"><h3 class="font-bold">📮 แจ้งเลขพัสดุขาไป</h3><p class="text-[11px] opacity-60 mt-1">เลือกขนส่ง + ใส่เลข Tracking</p><div class="mt-4 space-y-3"><select id="courier" class="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm"><option value="JT">JT Express</option><option value="Kerry">Kerry</option><option value="Flash">Flash Express</option><option value="Thailand Post">ไปรษณีย์ไทย</option><option value="Other">อื่นๆ</option></select><input id="tracking" placeholder="เลขพัสดุ เช่น TH123456789" class="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm"><button id="saveShip" class="w-full bg-yellow-400 text-black font-black py-3 rounded-xl">บันทึกเลขพัสดุ</button><button onclick="document.getElementById('shipModal').classList.add('hidden')" class="w-full bg-zinc-800 py-3 rounded-xl text-sm mt-2">ยกเลิก</button></div></div></div>
+
+<div class="mt-8 text-center text-[9px] opacity-30">V4 • Auth + Sequence • รองรับ 10k+ • ไม่โหลดหมด</div>
+</div>
+<script>
+const supa = window.supa || (window.getSupa ? window.getSupa() : null); // FIXED V3 singleton
+let curOrderId=null, currentMemberNo=null, currentEmail=null;
+const STATUS_FLOW=['รอตรวจสอบสลิป','สลิปผ่าน รอส่งของ','ลูกค้าส่งแล้ว กำลังเดินทาง','แอดมินรับของแล้ว','ตรวจพรีเกรด/ถ่าย RAW เสร็จ','ส่งคืนลูกค้า','จบงาน'];
+function formatMemberNo(n){ return 'CM-'+String(n).padStart(4,'0'); }
+function parseMemberNo(input){ if(!input) return null; const s=String(input).trim().toUpperCase().replace(/^CM-?/,'').trim(); if(!/^\d+$/.test(s)) return null; const num=parseInt(s,10); return isNaN(num)?null:num; }
+
+// === FIXED FLOW: Auto PSA button when pregrade completed ===
+function getPsaButton(order){
+  const s = (order.status||'').toLowerCase();
+  if(s.includes('จบงาน') || s.includes('raw') || s.includes('ตรวจพรีเกรด') || s.includes('ส่งคืน') || s.includes('completed') || s.includes('raw_photographed')){
+    return `<a href="/psa-order?order=${order.id}&member=${order.customer_member_no}" class="mt-2 inline-block bg-purple-600 text-white px-4 py-2 rounded-full text-[11px] font-bold">🚀 ส่งต่อ PSA เลย</a> <a href="/psa?card=${encodeURIComponent(order.card_names||'')}" class="mt-2 inline-block bg-zinc-800 border border-white/10 px-3 py-2 rounded-full text-[10px]">ดูเรท PSA</a>`;
+  }
+  return '';
+}
+
+function statusColor(s){ if(!s) return 'bg-zinc-800 text-zinc-300'; if(s.includes('รอตรวจสอบ')) return 'bg-yellow-500/20 text-yellow-400'; if(s.includes('รอส่งของ')) return 'bg-orange-500/20 text-orange-300'; if(s.includes('ส่งแล้ว')) return 'bg-blue-500/20 text-blue-300'; if(s.includes('รับของ')) return 'bg-purple-500/20 text-purple-300'; if(s.includes('ตรวจพรีเกรด')||s.includes('RAW')) return 'bg-indigo-500/20 text-indigo-300'; if(s.includes('ส่งคืน')) return 'bg-cyan-500/20 text-cyan-300'; if(s.includes('จบ')) return 'bg-emerald-500/20 text-emerald-300'; return 'bg-zinc-800 text-zinc-300'; }
+
+async function checkAuth(){
+  const {data:{user}}=await supa.auth.getUser();
+  if(user){
+    currentEmail=user.email;
+    document.getElementById('authBadge').innerText=user.email.split('@')[0];
+    document.getElementById('authBadge').className='text-[9px] bg-emerald-500 text-black px-2 py-0.5 rounded-full font-bold';
+    // ดึง member_no จาก customers
+    const {data:cust}=await supa.from('customers').select('member_no').eq('email', user.email).maybeSingle();
+    if(cust){ currentMemberNo=cust.member_no; document.getElementById('q').value=formatMemberNo(cust.member_no); }
+  }else{
+    document.getElementById('authBadge').innerText='ไม่ได้ล็อกอิน - ดูได้ทุก CM';
+    document.getElementById('authBadge').className='text-[9px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full';
+  }
+}
+
+async function search(){
+  let qRaw=document.getElementById('q').value.trim()||'';
+  if(!qRaw && currentMemberNo!==null){ qRaw=String(currentMemberNo); }
+  if(!qRaw) qRaw='0';
+  const mn=parseMemberNo(qRaw);
+  const qFormatted=mn!==null?formatMemberNo(mn):qRaw.toUpperCase();
+  document.getElementById('q').value=qFormatted;
+  const box=document.getElementById('result'); box.innerHTML='กำลังโหลด...';
+
+  let data=null;
+  // ✅ FIXED: ค้นทั้งแบบ text CM-0002 และแบบ int member_no เพื่อรองรับข้อมูลเก่า/ใหม่
+  let r=null;
+  if(mn!==null){
+    // ลองค้นด้วย member_no int ก่อน (ถ้า column เป็น int)
+    r=await supa.from('raw_orders').select('*').or(`customer_member_no.eq.${qFormatted},customer_member_no.eq.${mn},customer_member_no.ilike.%${qFormatted}%`).order('created_at',{ascending:false}).limit(20);
+  }else{
+    r=await supa.from('raw_orders').select('*').ilike('customer_member_no',`%${qRaw}%`).order('created_at',{ascending:false}).limit(20);
+  }
+  if(r.data && r.data.length) data=r.data;
+  else {
+    // fallback raw_cards
+    let r2=null;
+    if(mn!==null){
+      r2=await supa.from('raw_cards').select('*').or(`customer_member_no.eq.${qFormatted},customer_member_no.eq.${mn}`).ilike('id','PRE-%').order('created_at',{ascending:false}).limit(20);
+    }else{
+      r2=await supa.from('raw_cards').select('*').ilike('customer_member_no',`%${qRaw}%`).ilike('id','PRE-%').order('created_at',{ascending:false}).limit(20);
+    }
+    if(r2.data) data=r2.data.map(x=>({id:x.id, customer_member_no:x.customer_member_no, card_count:1, card_names:x.name, total_amount:0, slip_url:x.image_urls?.[0], status:x.status, tracking_in:x.tracking_in, courier_in:x.courier_in, tracking_out:x.tracking_out, courier_out:x.courier_out, created_at:x.created_at}));
+  }
+
+  if(!data||!data.length){ box.innerHTML=`<div class="bg-zinc-900 p-6 rounded-2xl text-center text-[13px]">ไม่พบออเดอร์ของ ${qFormatted}<br><span class="text-[11px] opacity-50">ลองใส่ 2 หรือ CM-0002</span><br><a href="/pregrade" class="mt-3 inline-block bg-yellow-400 text-black px-4 py-2 rounded-full text-xs font-black">+ สั่งพรีเกรดใหม่</a></div>`; return; }
+
+  box.innerHTML=data.map(o=>{
+    // ✅ FIXED: หา index แบบแม่นขึ้น ไม่ใช้ split
+    let idx=0;
+    for(let i=STATUS_FLOW.length-1;i>=0;i--){ if(o.status && o.status.includes(STATUS_FLOW[i].substring(0,4))){ idx=i; break; } if(o.status===STATUS_FLOW[i]){ idx=i; break; } }
+    // fallback ถ้าเจอคำตรงๆ
+    const exactIdx=STATUS_FLOW.indexOf(o.status);
+    if(exactIdx!==-1) idx=exactIdx;
+
+    const flow=STATUS_FLOW.map((s,i)=>`<div class="flex gap-2 items-center text-[11px] ${i<=idx?'text-yellow-400 font-bold':'opacity-30'}"><div class="w-2 h-2 rounded-full ${i<=idx?'bg-yellow-400':'bg-zinc-700'}"></div>${s}${i===idx?' ← ปัจจุบัน':''}</div>`).join('');
+    return `<div class="bg-zinc-900 border border-white/5 rounded-2xl p-5"><div class="flex justify-between"><span class="bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full text-xs font-bold">${o.id}</span><span class="px-3 py-1 rounded-full text-[10px] ${statusColor(o.status)}">${o.status}</span></div>
+    <div class="mt-3 text-sm">การ์ด: ${o.card_names||'-'} (${o.card_count||1}ใบ) • ${o.total_amount||0} บาท • ${o.customer_member_no}</div>
+    <div class="mt-3 grid grid-cols-2 gap-3 text-[11px]">
+      <div class="bg-black rounded-xl p-3 border border-white/5"><div class="opacity-50">ขาไป: ลูกค้า → ร้าน</div><div class="mt-1">${o.courier_in||'-'} ${o.tracking_in||''}</div>${o.tracking_in?`<a href="https://track.th/track/${o.tracking_in}" target="_blank" class="mt-2 inline-block bg-zinc-800 px-2 py-1 rounded-full text-[10px]">ติดตามพัสดุ</a>`:`<button data-ship="${o.id}" class="mt-2 bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full text-[10px]">+ แจ้งเลขพัสดุ</button>`}</div>
+      <div class="bg-black rounded-xl p-3 border border-white/5"><div class="opacity-50">ขากลับ: ร้าน → ลูกค้า</div><div class="mt-1">${o.courier_out||'-'} ${o.tracking_out||''}</div>${o.tracking_out?`<a href="https://track.th/track/${o.tracking_out}" target="_blank" class="mt-2 inline-block bg-zinc-800 px-2 py-1 rounded-full text-[10px]">ติดตามพัสดุ</a>`:`<div class="mt-2 text-[10px] opacity-40">แอดมินจะใส่เลขให้</div>`}</div>
+    </div>
+    <div class="mt-4 bg-black/50 rounded-xl p-3 space-y-1">${flow}</div>
+    <div class="mt-2 flex flex-wrap gap-2">${getPsaButton(o)}</div>
+    <div class="mt-3 flex gap-2"><a href="/my-raw?code=${o.customer_member_no}" class="text-[11px] bg-zinc-800 px-3 py-1 rounded-full">ดู RAW</a><span class="text-[10px] opacity-40">${new Date(o.created_at).toLocaleString('th-TH')}</span></div></div>`;
+  }).join('');
+  document.querySelectorAll('[data-ship]').forEach(b=>{
+    b.onclick=()=>{ curOrderId=b.getAttribute('data-ship'); document.getElementById('shipModal').classList.remove('hidden'); };
+  });
+}
+document.getElementById('btn').onclick=search;
+document.getElementById('q').addEventListener('keydown',e=>{if(e.key==='Enter')search();});
+document.getElementById('saveShip').onclick=async()=>{
+  const courier=document.getElementById('courier').value;
+  const tracking=document.getElementById('tracking').value.trim();
+  if(!tracking){ showModal('ใส่เลขพัสดุ'); return; }
+  if(!curOrderId) return;
+  const {error}=await supa.from('raw_orders').update({courier_in:courier, tracking_in:tracking, status:'ลูกค้าส่งแล้ว กำลังเดินทาง', updated_at:new Date().toISOString()}).eq('id',curOrderId);
+  if(error){
+    await supa.from('raw_cards').update({courier_in:courier, tracking_in:tracking, status:'ลูกค้าส่งแล้ว กำลังเดินทาง'}).eq('id',curOrderId);
+  }
+  showModal('บันทึกแล้ว ✅'); document.getElementById('shipModal').classList.add('hidden'); search();
+};
+(async()=>{ await checkAuth(); const p=new URLSearchParams(location.search).get('code'); if(p){document.getElementById('q').value=p;} search(); })();
+</script>
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(confirm(msg) && onOk) onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+</body></html>

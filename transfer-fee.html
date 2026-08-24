@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>โอนเปลี่ยนเจ้าของ - Card Matem V4 FIXED</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script><script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+<style>body{font-family:'Kanit',sans-serif;background:#050507;color:white}</style></head>
+<body class="flex justify-center bg-black"><div class="w-full max-w-[520px] min-h-screen bg-[#0a0a0f] px-5 py-5 flex flex-col">
+<div class="flex justify-between items-center"><a href="https://www.cardmatem.store/" class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-black text-[10px]">CM</div><span class="font-black text-[14px]"><span class="text-yellow-400">Card</span> <span class="text-purple-400">Matem</span> <span class="text-[10px] text-zinc-500">TRANSFER V4 FIXED</span></span></a><div class="flex gap-2"><span id="authBadge" class="text-[9px] bg-zinc-800 px-2 py-1 rounded-full">...</span><a href="https://www.cardmatem.store/" class="text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">← กลับ</a></div></div>
+
+<div class="mt-4 bg-red-500/10 border border-red-500/30 rounded-xl p-2.5 flex justify-between items-center">
+  <div class="text-[10px] text-red-300 font-bold">✅ V5 BAN-CHECK • กันแบนโอน • เจ้าของแบนอายัดการ์ด • คนรับแบนห้ามโอนให้</div>
+  <div class="text-[8px] bg-red-500 text-white px-2 py-0.5 rounded-full font-black">V5</div>
+</div>
+
+<div class="mt-4 bg-[#1e1c24] border border-white/5 rounded-[16px] p-5"><h1 class="text-[18px] font-black"><span class="text-yellow-300">โอนเปลี่ยนเจ้าของการ์ด V4</span></h1><div id="feeStatus" class="mt-2 text-[11px]">กำลังเช็คค่าธรรมเนียม...</div><div id="cardInfo" class="mt-4 bg-[#0a0a0f] border border-white/10 rounded-xl p-3 text-[11px]">กำลังโหลด...</div><div id="historyBox" class="mt-3"></div><div id="ownerCheck" class="mt-3 hidden text-[11px]"></div></div>
+
+<div id="freeBox" class="hidden mt-4 bg-gradient-to-br from-red-500/15 to-orange-500/10 border border-red-500/30 rounded-[16px] p-5 text-center">
+<div class="text-[16px] font-black bg-gradient-to-r from-red-500 to-orange-400 bg-clip-text text-transparent">🎉 โอนฟรีช่วงโปรโมชั่น</div>
+<div class="text-[11px] text-zinc-300 mt-1">ไม่เสียค่าธรรมเนียม - โอนทันที • กันโอนซ้ำ</div>
+<button id="freeConfirmBtn" class="mt-4 w-full bg-gradient-to-r from-red-500 to-orange-400 text-white font-black py-3 rounded-xl text-[13px]">✅ ยืนยันโอนฟรี</button>
+</div>
+
+
+<div id="claimBox" class="hidden mt-4 space-y-4">
+<div class="bg-[#1e1c24] border border-blue-500/30 rounded-[16px] p-5">
+<div class="text-[13px] font-black text-blue-300">👋 ฉันซื้อมาแล้ว - แจ้งถือการ์ดจริง (Claim)</div>
+<div class="text-[11px] text-zinc-400 mt-1">การ์ดเปลี่ยนมือหลายทอดนอกระบบ? ถ้าคุณถือการ์ดอยู่จริง ให้ถ่ายรูปถือการ์ด + หลักฐานซื้อ แล้วส่งให้แอดมินอนุมัติเป็นเจ้าของใหม่</div>
+<div class="mt-4 grid grid-cols-2 gap-3">
+<div><div class="text-[10px] text-zinc-400 mb-1">📸 รูปถือการ์ด (บังคับ)</div><input id="claimHoldFile" type="file" accept="image/*" class="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-[11px]"><img id="claimHoldPreview" class="mt-2 w-full h-[120px] object-cover rounded-xl hidden border border-white/10"></div>
+<div><div class="text-[10px] text-zinc-400 mb-1">🧾 หลักฐานซื้อ (สลิปแชท/โอน) (ถ้ามี)</div><input id="claimEvidenceFile" type="file" accept="image/*" class="w-full bg-black border border-white/10 rounded-xl px-3 py-2 text-[11px]"><img id="claimEvidencePreview" class="mt-2 w-full h-[120px] object-cover rounded-xl hidden border border-white/10"></div>
+</div>
+<div class="mt-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-2.5 text-[10px] text-yellow-200">⚠️ ต้องเป็นรูปคุณถือการ์ดจริง เห็นหน้า+การ์ดชัด แอดมินจะเช็คใน <b>admin-transfers.html</b> แล้วกดอนุมัติ ระบบจะเปลี่ยนเจ้าของ + ลบออกจากตลาด + เพิ่มประวัติ 1 มือ</div>
+<button id="claimSubmitBtn" class="mt-4 w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white font-black py-3 rounded-xl text-[13px]">📤 ส่ง Claim ให้แอดมินตรวจสอบ</button>
+</div>
+</div>
+
+<div id="notOwnerBox" class="hidden mt-4 bg-[#1e1c24] border border-orange-500/30 rounded-[16px] p-5 text-center">
+<div class="text-[13px] font-black text-orange-300">⚠️ คุณไม่ใช่เจ้าของในระบบ</div>
+<div class="text-[11px] text-zinc-400 mt-1">การ์ดใบนี้ชื่อเจ้าของปัจจุบันคือ <span id="notOwnerCurrent" class="text-white font-bold"></span><br>ถ้าคุณซื้อมาแล้วและถือการ์ดอยู่จริง ให้กดปุ่มด้านล่างเพื่อ Claim</div>
+<button onclick="showClaimBox()" class="mt-4 w-full bg-blue-600 text-white font-black py-3 rounded-xl text-[13px]">👋 ฉันซื้อมาแล้ว - ส่งรูปถือการ์ด</button>
+<button onclick="document.getElementById('notOwnerBox').classList.add('hidden')" class="mt-2 w-full bg-zinc-800 border border-white/10 py-2.5 rounded-xl text-[11px]">ปิด</button>
+</div>
+
+<div id="paidBox" class="hidden mt-4 space-y-4">
+<div class="bg-[#1e1c24] border border-yellow-500/20 rounded-[16px] p-5">
+<div class="text-[13px] font-black text-yellow-300">💰 ค่าโอน 29 บาท / 1 ใบ - โอนแล้วมีประวัติผ่านกี่มือ</div>
+<div class="mt-4 space-y-3">
+<div class="bg-[#0a0a0f] border border-white/10 rounded-xl p-3">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden border border-white"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIbGNtcwIQAABtbnRyUkdCIFhZWiAH4gADABQACQAOAB1hY3NwTVNGVAAAAABzYXdzY3RybAAAAAAAAAAAAAAAAAAA9tYAAQAAAADTLWhhbmSdkQA9QICwPUB0LIGepSKOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAABxjcHJ0AAABDAAAAAx3dHB0AAABGAAAABRyWFlaAAABLAAAABRnWFlaAAABQAAAABRiWFlaAAABVAAAABRyVFJDAAABaAAAAGBnVFJDAAABaAAAAGBiVFJDAAABaAAAAGBkZXNjAAAAAAAAAAV1UkdCAAAAAAAAAAAAAAAAdGV4dAAAAABDQzAAWFlaIAAAAAAAAPNUAAEAAAABFslYWVogAAAAAAAAb6AAADjyAAADj1hZWiAAAAAAAABilgAAt4kAABjaWFlaIAAAAAAAACSgAAAPhQAAtsRjdXJ2AAAAAAAAACoAAAB8APgBnAJ1A4MEyQZOCBIKGAxiDvQRzxT2GGocLiBDJKwpai5+M+s5sz/WRldNNlR2XBdkHWyGdVZ+jYgskjacq6eMstu+mcrH12Xkd/H5////2wBDAAkGBwgHBgkICAgKCgkLDhcPDg0NDhwUFREXIh4jIyEeICAlKjUtJScyKCAgLj8vMjc5PDw8JC1CRkE6RjU7PDn/2wBDAQoKCg4MDhsPDxs5JiAmOTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTn/wAARCAAPADIDASIAAhEBAxEB/8QAFwAAAwEAAAAAAAAAAAAAAAAAAAMEBf/EACgQAAIBAwMDBAIDAAAAAAAAAAIDAQQFEQASIQYxcRMiQWEyMxWBof/EABgBAAIDAAAAAAAAAAAAAAAAAAIFAQQG/8QAIBEAAQMEAgMAAAAAAAAAAAAAAQAEERIiMUECMiFRwf/aAAwDAQACEQMRAD8A0aSxnfL1dlLbsNMsZEQOd87p406Okg/kCoJryOoUgWuFSd+yZmIge/PfPjUyL22yXm7MSuDJ8sVmSxI+6eY01vVnrvJ77esnMp4Q4waQSyImJieO08aq27WT4lrTf2kzn4sxtjuAzUkqmY5NOwwJoD7Z295j61RR9P1XqNiup3oiKdrV8fkQxmI/3VLeqzfvN9ConyLQAxMhgBPvGPnzOhXV1Sl7Hqpliw2G0ZkpnbJBA/3jbnUWoBxagzUVn26y1VZcioSWa2rCTaO3JCMRmePme0RGq7pZaJdM6otdayqCmECfDF7JGCnEY8T3j40ikvraG9nc6JIJI87lZkhnP5Rz98/WqLr1GyrpaimTTikao4OoOYjccxOcZj40PiEwbhmG9x47qntuKd+sbyo1/rHxGjQv9Y+I0aJJhhf/2Q==" class="w-8 h-8 object-contain"></div>
+<div><div class="text-[11px] font-bold text-[#138F2D]">KBank กสิกรไทย</div><div class="text-[13px] font-mono font-black">0048573029</div><div class="text-[10px] text-zinc-400">วสันต์ จิตพิมพ์</div></div>
+</div>
+<button onclick="copyK()" class="bg-zinc-800 border border-white/10 px-3 py-2 rounded-full text-[10px]">📋 คัดลอก</button>
+</div></div>
+<div class="bg-[#0a0a0f] border border-white/10 rounded-xl p-3">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden border border-white"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIbGNtcwIQAABtbnRyUkdCIFhZWiAH4gADABQACQAOAB1hY3NwTVNGVAAAAABzYXdzY3RybAAAAAAAAAAAAAAAAAAA9tYAAQAAAADTLWhhbmSdkQA9QICwPUB0LIGepSKOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAABxjcHJ0AAABDAAAAAx3dHB0AAABGAAAABRyWFlaAAABLAAAABRnWFlaAAABQAAAABRiWFlaAAABVAAAABRyVFJDAAABaAAAAGBnVFJDAAABaAAAAGBiVFJDAAABaAAAAGBkZXNjAAAAAAAAAAV1UkdCAAAAAAAAAAAAAAAAdGV4dAAAAABDQzAAWFlaIAAAAAAAAPNUAAEAAAABFslYWVogAAAAAAAAb6AAADjyAAADj1hZWiAAAAAAAABilgAAt4kAABjaWFlaIAAAAAAAACSgAAAPhQAAtsRjdXJ2AAAAAAAAACoAAAB8APgBnAJ1A4MEyQZOCBIKGAxiDvQRzxT2GGocLiBDJKwpai5+M+s5sz/WRldNNlR2XBdkHWyGdVZ+jYgskjacq6eMstu+mcrH12Xkd/H5////2wBDAAkGBwgHBgkICAgKCgkLDhcPDg0NDhwUFREXIh4jIyEeICAlKjUtJScyKCAgLj8vMjc5PDw8JC1CRkE6RjU7PDn/2wBDAQoKCg4MDhsPDxs5JiAmOTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTn/wAARCAASADADASIAAhEBAxEB/8QAGQAAAwEBAQAAAAAAAAAAAAAAAAEEBQYD/8QAKRAAAgEDAgQFBQAAAAAAAAAAAQIDAAQRBRIGEyIxIUFCUZEUMmFxwf/EABgBAAMBAQAAAAAAAAAAAAAAAAECBQQA/8QAJhEAAQQBAgQHAAAAAAAAAAAAAQACAxESFIEEMUHwITIzNGGRsf/aAAwDAQACEQMRAD8A6fSOFEu9KhvZZ2VpXGFA7LnvWrc8Fx3N86iWK3tkQCMRjrb3LVzo125Ok29qm5UjGyQocMy+VaY169fT0nfl8wMqQH1ED7siq82qD8sutD772UDh9CWYY9LPz4d7rAk0iVNXbTjIgYZIkPYqBnPxXq3D9yIndJYpMFdqoSSwIyD+B+6Rnk1HW5JUmW2LbsMT4KMdqsijvhazwi7hO/aokMuCuPTW8ySANsgGhakiKEudi0kWaP4lHoKG02vn6lyAjh8IO+cjGfDBqYcPXDLuSeFkONrAnqyM/wAqya31XmdeqJz3xuVmxWZNfX9jLJbLeMVTo6SCMY8qDHSO8rgjK2FlZsIGyhjYq4wSPHyNVX7uXGWb5ooppfWalg9u5R0qKK1qeEyxYksST7mlRRXDki7mv//Z" class="w-8 h-8 object-contain"></div>
+<div><div class="text-[11px] font-bold text-[#0D47A1]">Krungthai NEXT กรุงไทย</div><div class="text-[13px] font-mono font-black">4800250110</div><div class="text-[10px] text-zinc-400">วสันต์ จิตพิมพ์</div></div>
+</div>
+<button onclick="copyN()" class="bg-zinc-800 border border-white/10 px-3 py-2 rounded-full text-[10px]">📋 คัดลอก</button>
+</div></div>
+</div>
+<div class="mt-4 grid grid-cols-2 gap-3"><button onclick="copyK()" class="bg-[#138F2D] text-white font-black py-3 rounded-xl text-[12px]">คัดลอก KBank</button><button onclick="copyN()" class="bg-[#1565C0] text-white font-black py-3 rounded-xl text-[12px]">คัดลอก กรุงไทย</button></div>
+<div id="copyMsg" class="hidden mt-2 text-[10px] text-emerald-300 text-center"></div>
+</div>
+
+<div class="mt-4 bg-[#1e1c24] border border-white/10 rounded-[16px] p-4 space-y-3">
+<div class="text-[11px] font-bold text-yellow-300">👤 โอนให้ใคร</div>
+<div class="flex gap-2"><input id="newOwnerNo" placeholder="CM-0002 หรือ 2" class="flex-1 bg-black border border-white/10 rounded-xl px-3 py-3 text-[12px]"><button onclick="lookupNewOwner()" class="bg-zinc-800 border border-white/10 px-4 rounded-xl text-[11px]">ค้นหา</button></div>
+<div><input id="newOwnerEmail" placeholder="อีเมลผู้รับโอน (ถ้าไม่มีสมาชิก)" class="w-full bg-black border border-white/10 rounded-xl px-3 py-3 text-[12px]"></div>
+<div id="newOwnerBox" class="hidden bg-black border border-emerald-500/20 rounded-xl p-3 text-[11px] text-emerald-300"></div>
+</div>
+
+<div class="mt-4 bg-[#1e1c24] border border-white/10 rounded-[16px] p-4">
+<div class="text-[11px] font-bold">📎 แนบสลิป (ถ้าโอนแบบจ่าย 29)</div>
+<input id="slipFile" type="file" accept="image/*" class="w-full mt-2 text-[11px] bg-black border border-white/10 rounded-xl p-2">
+<img id="slipPreview" class="hidden w-full mt-3 rounded-xl border border-white/10 max-h-[300px] object-contain">
+<button id="submitSlipBtn" class="mt-4 w-full bg-yellow-400 text-black font-black py-3 rounded-xl text-[13px]">💸 ส่งสลิป + ขอโอน 29฿</button>
+<div class="text-[9px] text-zinc-500 text-center mt-2">แอดมินจะตรวจสอบสลิปใน admin-transfers.html แล้วอนุมัติ • กันโอนซ้ำ</div>
+</div>
+<div id="successBox" class="hidden mt-6 bg-emerald-500/10 border border-emerald-500/20 rounded-[16px] p-6 text-center"><div class="text-[24px]">✅</div><div class="text-[14px] font-black mt-2">ส่งคำขอโอนแล้ว</div><div class="text-[11px] text-zinc-400 mt-1">รอแอดมินอนุมัติใน admin-transfers.html จะมีประวัติผ่านกี่มือเพิ่ม • ถ้าโอนฟรีเปลี่ยนเจ้าของทันที</div><a href="/my-account" class="mt-4 inline-block bg-zinc-800 px-5 py-2.5 rounded-full text-[11px]">ไปหน้าบัญชี</a> <a id="goCard" href="#" class="mt-2 inline-block bg-yellow-400 text-black px-5 py-2.5 rounded-full text-[11px] font-bold">ดูการ์ด</a></div>
+</div>
+<script>
+const SUPABASE_URL='https://mgandefbbgvlfqqzfnoe.supabase.co';const anonKey='sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';const supa = window.supa || (window.getSupa ? window.getSupa() : null); // FIXED V3 singleton
+const KBANK_DISP='0048573029'; const KBANK_COPY='0048573029'; const NEXT_DISP='4800250110'; // FIX: ดึงจาก site_settings.transfer_account ถ้ามี
+// FIX: ดึงเลขบัญชีจาก site_settings เพื่อไม่ต้องแก้หลายไฟล์
+async function getTransferAccounts(){ try{ const {data}=await supa.from('site_settings').select('transfer_accounts').maybeSingle(); if(data?.transfer_accounts) return data.transfer_accounts; }catch(e){} return null; } const NEXT_COPY='4800250110';
+const ADMIN_EMAILS=['vasan.jitpim@gmail.com','cardmatem@gmail.com','jellopy2ea@gmail.com','dekchaimaten@gmail.com','admin@cardmatem.store'];
+function copyK(){navigator.clipboard.writeText(KBANK_COPY).then(()=>{const m=document.getElementById('copyMsg');m.classList.remove('hidden');m.innerText='✅ คัดลอก KBank '+KBANK_COPY+' แล้ว';setTimeout(()=>m.classList.add('hidden'),2000);});}
+function copyN(){navigator.clipboard.writeText(NEXT_COPY).then(()=>{const m=document.getElementById('copyMsg');m.classList.remove('hidden');m.innerText='✅ คัดลอก NEXT '+NEXT_COPY+' แล้ว';setTimeout(()=>m.classList.add('hidden'),2000);});}
+const FEE_STORAGE_KEY='cm_transfer_fee_mode';let GLOBAL_FEE_MODE=localStorage.getItem(FEE_STORAGE_KEY)||'free';let curCardId=new URLSearchParams(location.search).get('card_id')||'';let curCardData=null; let newOwnerData=null; let currentUser=null;
+
+function formatMemberNo(no){ if(no==null) return ''; return 'CM-'+String(no).padStart(4,'0'); }
+function parseMemberNo(input){ if(!input) return null; const s=String(input).trim().toUpperCase().replace(/^CM-?/,'').trim(); if(!/^\d+$/.test(s)) return null; const num=parseInt(s,10); return isNaN(num)?null:num; }
+
+async function checkAuthBadge(){
+  const {data:{user}}=await supa.auth.getUser();
+  currentUser=user;
+  const badge=document.getElementById('authBadge');
+  if(!user){ badge.innerText='ไม่ได้ล็อกอิน'; badge.className='text-[9px] bg-red-500/20 text-red-300 px-2 py-1 rounded-full border border-red-500/20'; return null; }
+  const isAdmin=ADMIN_EMAILS.includes((user.email||'').toLowerCase()) || user.email.toLowerCase()=== 'vasan.jitpim@gmail.com';
+  badge.innerText=(isAdmin?user.email.split('@')[0]+' ✅':'')+' '+(user.email.split('@')[0]);
+  badge.className=isAdmin?'text-[9px] bg-emerald-500 text-black px-2 py-1 rounded-full font-black':'text-[9px] bg-zinc-700 px-2 py-1 rounded-full';
+  return user;
+}
+
+async function loadFee(){
+  try{const {data}=await supa.from('site_settings').select('value').eq('key','transfer_fee_mode').maybeSingle();if(data&&data.value){GLOBAL_FEE_MODE=data.value; localStorage.setItem(FEE_STORAGE_KEY,GLOBAL_FEE_MODE);}}catch(e){}
+  const el=document.getElementById('feeStatus');
+  if(GLOBAL_FEE_MODE==='free'){el.innerHTML='🎉 <b class="bg-gradient-to-r from-red-500 to-orange-400 bg-clip-text text-transparent">โอนฟรีช่วงโปรโมชั่น</b> • กันโอนซ้ำ';document.getElementById('freeBox').classList.remove('hidden');document.getElementById('paidBox').classList.add('hidden');}
+  else{el.innerHTML='💰 <b class="text-yellow-300">ค่าโอน 29 บาท/ใบ</b> - โอนแล้วนับมือเพิ่ม';document.getElementById('paidBox').classList.remove('hidden');document.getElementById('freeBox').classList.add('hidden');}
+}
+
+async function loadCard(){
+  const info=document.getElementById('cardInfo');
+  const ownerCheck=document.getElementById('ownerCheck');
+  const user=await checkAuthBadge();
+  if(!curCardId){info.innerHTML='ไม่พบรหัสการ์ด ?card_id=xxx';return;}
+  try{
+    const {data, error}=await supa.from('cards').select('*').eq('qr_code', curCardId).maybeSingle();
+    if(error) throw error;
+    if(!data){info.innerHTML='ไม่พบ '+curCardId;return;}
+    curCardData=data;
+    const photos=data.raw_photos||{};
+    const count8=Array.isArray(photos)?photos.length:Object.keys(photos).length;
+    let firstImg='';
+    if(Array.isArray(photos) && photos.length) firstImg=photos[0];
+    else firstImg=photos[1]||data.image_url||'';
+    info.innerHTML=`<div class="flex gap-3"><img src="${firstImg}" class="w-16 h-20 object-cover rounded-lg bg-black"><div><div class="font-black text-[13px]">${data.title||curCardId}</div><div class="text-[10px] text-zinc-500">QR: ${data.qr_code} • ${count8}/8 รูป • ${data.rarity||''} • ${data.status||''}</div><div class="text-[10px] text-zinc-400">เจ้าของเดิม: ${formatMemberNo(data.owner_member_no)} ${data.owner_email||'-'}</div><div class="text-[9px] text-emerald-300 mt-1">ราคาประเมิน: ${data.price?'฿'+data.price:'-'}</div></div></div>`;
+
+    // ✅ FIXED: เช็คเจ้าของก่อนโอน
+    let isOwner=false, isAdmin=false;
+  // FIX: เช็คสลิปซ้ำ ป้องกัน replay attack
+  async function slipReplayCheck(hash){ const {data}=await supa.from('slips').select('id').eq('slip_hash', hash).maybeSingle(); return !!data; }
+    if(user){
+      isAdmin=ADMIN_EMAILS.includes((user.email||'').toLowerCase()) || user.email.toLowerCase()=== 'vasan.jitpim@gmail.com';
+      if(data.owner_email && user.email && data.owner_email.toLowerCase()===user.email.toLowerCase()) isOwner=true;
+      if(!isOwner && data.owner_member_no){
+        const {data:me}=await supa.from('customers').select('member_no').eq('email', user.email).maybeSingle();
+        if(me && me.member_no===data.owner_member_no) isOwner=true;
+      }
+    }
+    if(!isOwner && !isAdmin){
+      ownerCheck.className='mt-3 bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-[11px] text-red-300';
+      ownerCheck.innerHTML=`❌ คุณไม่ใช่เจ้าของการ์ดใบนี้<br>เจ้าของคือ ${formatMemberNo(data.owner_member_no)} ${data.owner_email||''}<br>ต้องล็อกอินด้วยอีเมลเจ้าของ หรือแอดมินเท่านั้นถึงโอนได้`;
+      ownerCheck.classList.remove('hidden');
+      document.getElementById('freeConfirmBtn').disabled=true;
+      document.getElementById('submitSlipBtn').disabled=true;
+      document.getElementById('freeConfirmBtn').className='mt-4 w-full bg-zinc-800 text-zinc-500 font-black py-3 rounded-xl text-[13px]';
+      document.getElementById('submitSlipBtn').className='mt-4 w-full bg-zinc-800 text-zinc-500 font-black py-3 rounded-xl text-[13px]';
+    }else{
+      ownerCheck.className='mt-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-[11px] text-emerald-300';
+      ownerCheck.innerHTML=isAdmin?`✅ คุณเป็นแอดมิน โอนได้ทุกใบ`:`✅ คุณเป็นเจ้าของ ${formatMemberNo(data.owner_member_no)} โอนได้`;
+      ownerCheck.classList.remove('hidden');
+    }
+
+    // ✅ NEW: เช็คแบน เจ้าของเดิมถูกแบนหรือไม่
+    try{
+      if(data.owner_member_no){
+        const {data:ownerCust}=await supa.from('customers').select('is_banned,ban_reason').eq('member_no', data.owner_member_no).maybeSingle();
+        if(ownerCust && ownerCust.is_banned){
+          ownerCheck.className='mt-3 bg-red-600/20 border border-red-500/50 rounded-xl p-3 text-[11px] text-red-200 font-bold';
+          ownerCheck.innerHTML=`🚫 เจ้าของเดิม ${formatMemberNo(data.owner_member_no)} ถูกแบนอยู่<br>เหตุผล: ${ownerCust.ban_reason||'-'}<br><br>การ์ดใบนี้ถูกอายัด ห้ามโอนจนกว่าจะปลดแบน`;
+          ownerCheck.classList.remove('hidden');
+          document.getElementById('freeConfirmBtn').disabled=true;
+          document.getElementById('submitSlipBtn').disabled=true;
+          document.getElementById('freeConfirmBtn').className='mt-4 w-full bg-zinc-800 text-zinc-500 font-black py-3 rounded-xl text-[13px]';
+          document.getElementById('submitSlipBtn').className='mt-4 w-full bg-zinc-800 text-zinc-500 font-black py-3 rounded-xl text-[13px]';
+          return;
+        }
+      }
+    }catch(e){}
+
+    // history + check duplicate pending
+    try{
+      const {data:trans}=await supa.from('ownership_transfers').select('*').eq('card_id', data.qr_code).order('created_at',{ascending:true});
+      const hb=document.getElementById('historyBox');
+      if(trans&&trans.length){
+        const pending=trans.filter(t=>t.status==='pending_slip' || t.status==='pending_claim');
+        hb.innerHTML=`<div class="mt-3 bg-black border border-white/10 rounded-xl p-3"><div class="text-[11px] font-bold">📜 ประวัติผ่านมา ${trans.length} มือ ${pending.length?`• <span class="text-yellow-400">มีค้าง ${pending.length} รายการรออนุมัติ</span>`:''}</div><div class="mt-2 space-y-1">`+trans.map((t,i)=>`<div class="text-[10px] text-zinc-400">${i+1}. ${t.from_member_no?formatMemberNo(t.from_member_no):t.from_email} → ${t.to_member_no?formatMemberNo(t.to_member_no):t.to_email} • ${new Date(t.created_at).toLocaleDateString('th-TH')} ${t.status} ${t.fee_mode}</div>`).join('')+`</div></div>`;
+        if(pending.length){
+          ownerCheck.innerHTML+=`<br><br>⚠️ มีรายการโอนค้าง ${pending.length} รายการ รออนุมัติอยู่ ไม่ควรสร้างซ้ำ`;
+        }
+      }else{ hb.innerHTML='<div class="mt-2 text-[10px] text-zinc-500">มือแรก - ยังไม่เคยโอน</div>'; }
+    }catch(e){}
+
+  }catch(e){info.innerText=e.message;}
+}
+
+document.getElementById('slipFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const img=document.getElementById('slipPreview');img.src=u;img.classList.remove('hidden');});
+
+async function lookupNewOwner(){
+  let q=document.getElementById('newOwnerNo').value.trim();
+  const emailInput=document.getElementById('newOwnerEmail').value.trim();
+  if(!q && !emailInput) return showModal('ใส่เลขสมาชิกใหม่ หรืออีเมลใหม่');
+  if(q){
+    const mn=parseMemberNo(q);
+    if(mn!==null){
+      const {data, error}=await supa.from('customers').select('*').eq('member_no', mn).maybeSingle();
+      if(data){
+        newOwnerData=data;
+        document.getElementById('newOwnerEmail').value=data.email;
+        document.getElementById('newOwnerBox').classList.remove('hidden');
+        document.getElementById('newOwnerBox').innerHTML=`✅ ${formatMemberNo(data.member_no)} ${data.display_name||''} ${data.email} • Sequence กันซ้ำ`;
+        return;
+      }else{
+        document.getElementById('newOwnerBox').classList.remove('hidden');
+        document.getElementById('newOwnerBox').className='bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-[11px] text-red-300';
+        document.getElementById('newOwnerBox').innerHTML=`❌ ไม่พบสมาชิก ${formatMemberNo(mn)}<br>จะโอนไปอีเมล ${emailInput||'(ต้องใส่อีเมล)'} แทน`;
+        if(emailInput) newOwnerData={member_no:mn, email:emailInput, display_name:''};
+        return;
+      }
+    }
+  }
+  if(emailInput){
+    // ลองหาจาก email
+    const {data}=await supa.from('customers').select('*').ilike('email', emailInput).maybeSingle();
+    if(data){
+      newOwnerData=data;
+      document.getElementById('newOwnerNo').value=formatMemberNo(data.member_no);
+      document.getElementById('newOwnerBox').classList.remove('hidden');
+      document.getElementById('newOwnerBox').className='bg-black border border-emerald-500/20 rounded-xl p-3 text-[11px] text-emerald-300';
+      document.getElementById('newOwnerBox').innerHTML=`✅ ${formatMemberNo(data.member_no)} ${data.display_name} ${data.email}`;
+    }else{
+      document.getElementById('newOwnerBox').classList.remove('hidden');
+      document.getElementById('newOwnerBox').className='bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-[11px] text-yellow-300';
+      document.getElementById('newOwnerBox').innerHTML=`⚠️ ไม่พบสมาชิกในระบบ แต่อนุญาตให้โอนไปอีเมล ${emailInput} ได้ (จะสร้างลูกค้าใหม่ภายหลัง)`;
+      newOwnerData=null;
+    }
+  }
+}
+
+async function compressImage(file, maxW){
+  return new Promise((resolve)=>{
+    const img=new Image(); img.src=URL.createObjectURL(file);
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      let w=img.width, h=img.height;
+      if(w>maxW){ h*=maxW/w; w=maxW; }
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      canvas.toBlob((blob)=>resolve(blob), 'image/webp', 0.8);
+    };
+    img.onerror=()=>resolve(file);
+  });
+}
+
+async function submitTransfer(isFree){
+  const btn=isFree?document.getElementById('freeConfirmBtn'):document.getElementById('submitSlipBtn');
+  const orig=btn.innerText; btn.innerText='กำลังส่ง...'; btn.disabled=true;
+  try{
+    const {data:{user}}=await supa.auth.getUser();
+    if(!user){showModal('ล็อกอินก่อน');location.href='https://www.cardmatem.store/';return;}
+
+    // ✅ NEW: กันคนแบนโอนออก + กันคนแบนรับโอน
+    try{
+      if(curCardData?.owner_member_no){
+        const {data:fromBan}=await supa.from('customers').select('is_banned,ban_reason').eq('member_no', curCardData.owner_member_no).maybeSingle();
+        if(fromBan && fromBan.is_banned){ showModal(`🚫 เจ้าของเดิมถูกแบนอยู่: ${fromBan.ban_reason||''}\nการ์ดใบนี้อายัด ห้ามโอน`); btn.innerText=orig; btn.disabled=false; return; }
+      }
+      // FIXED HIGH 4: เช็คแบนทั้ง member_no และ email กันสมัครใหม่หลุด
+      try{
+        if(curCardData?.owner_email){
+          const {data:fromBanEmail}=await supa.from('customers').select('is_banned,ban_reason').eq('email', curCardData.owner_email).maybeSingle();
+          if(fromBanEmail && fromBanEmail.is_banned){ showModal(`🚫 เจ้าของเดิม (email) ถูกแบนอยู่: ${fromBanEmail.ban_reason||''}\nการ์ดใบนี้อายัด ห้ามโอน`); btn.innerText=orig; btn.disabled=false; return; }
+        }
+      }catch(e){}
+      // เช็คคนรับโอนว่าโดนแบนไหม
+      let checkToNo = newOwnerData?newOwnerData.member_no:parseMemberNo(document.getElementById('newOwnerNo').value.trim());
+      if(checkToNo){
+        const {data:toBan}=await supa.from('customers').select('is_banned,ban_reason').eq('member_no', checkToNo).maybeSingle();
+        if(toBan && toBan.is_banned){ showModal(`🚫 คนรับโอน ${formatMemberNo(checkToNo)} ถูกแบนอยู่: ${toBan.ban_reason||''}\nห้ามโอนให้คนแบน`); btn.innerText=orig; btn.disabled=false; return; }
+        try{
+          const checkToEmail = document.getElementById('newOwnerEmail')?.value.trim()||'';
+          if(checkToEmail){
+            const {data:toBanEmail}=await supa.from('customers').select('is_banned,ban_reason').eq('email', checkToEmail).maybeSingle();
+            if(toBanEmail && toBanEmail.is_banned){ showModal(`🚫 คนรับโอน (email) ถูกแบนอยู่: ${toBanEmail.ban_reason||''}\nห้ามโอนให้คนแบน`); btn.innerText=orig; btn.disabled=false; return; }
+          }
+        }catch(e){}
+      }
+    }catch(e){}
+
+    
+    // FIXED: ถ้าไม่ใช่เจ้าของ ให้แนะนำ Claim แทน (กรณีเปลี่ยนมือหลายทอดนอกระบบ)
+    try{
+      const currentUserEmail = (user.email||'').toLowerCase();
+      const ownerEmail = (curCardData?.owner_email||'').toLowerCase();
+      let isOwner = ownerEmail && ownerEmail === currentUserEmail;
+      let isOwnerByNo = false;
+      try{
+        const {data:{user:u2}} = await supa.auth.getUser();
+        if(u2){
+          const {data:me} = await supa.from('customers').select('member_no').eq('email', u2.email).maybeSingle();
+          if(me && curCardData?.owner_member_no && me.member_no === curCardData.owner_member_no) isOwnerByNo = true;
+        }
+      }catch(e){}
+      if(!isOwner && !isOwnerByNo && curCardData?.owner_member_no!==0){
+        // ไม่ใช่เจ้าของ -> ถ้ากดโอนฟรีหรือโอน 29 แบบปกติ ให้เด้งไป Claim แทน
+        if(isFree){
+          const ownerText = `${curCardData.owner_email||''} ${curCardData.owner_member_no ? '('+formatMemberNo(curCardData.owner_member_no)+')' : ''}`;
+          showNotOwnerBox(ownerText);
+          btn.innerText=orig; btn.disabled=false;
+          return;
+        }
+      }
+    }catch(e){}
+
+    // ✅ FIXED: กันโอนซ้ำ ถ้ามี pending อยู่แล้ว
+    const {data:pendingExist}=await supa.from('ownership_transfers').select('id').eq('card_id', curCardId).in('status',['pending_slip','pending_claim']).maybeSingle();
+    if(pendingExist){ showModal('การ์ดใบนี้มีรายการโอนค้างรอแอดมินอนุมัติอยู่แล้ว ('+pendingExist.id+') ไม่สามารถสร้างซ้ำได้'); btn.innerText=orig; btn.disabled=false; return; }
+
+    let slipUrl=null;
+    if(!isFree){
+      const file=document.getElementById('slipFile').files[0];
+      if(!file){showModal('แนบสลิปก่อน');btn.innerText=orig;btn.disabled=false;return;}
+      try{
+        const compressed=await compressImage(file, 800);
+        const fname=`slips/${Date.now()}_${file.name.split('.')[0]}.webp`;
+        const {error}=await supa.storage.from('slips').upload(fname,compressed);
+        if(!error){ try{ const {data:pub}=supa.storage.from('slips').getPublicUrl(fname); slipUrl=pub.publicUrl; if(!slipUrl){ const {data:signed}=await supa.storage.from('slips').createSignedUrl(fname, 60*60*24*365); slipUrl=signed?.signedUrl||null; } }catch(e){} }
+        else{ slipUrl=null; }
+      }catch(e){}
+    }
+
+    const toEmail=document.getElementById('newOwnerEmail').value.trim()||user.email;
+    let toNo=newOwnerData?newOwnerData.member_no:null;
+    if(!toNo){
+      const rawNo=document.getElementById('newOwnerNo').value.trim();
+      toNo=parseMemberNo(rawNo);
+    }
+
+    const payload={
+      card_id:curCardData?.qr_code||curCardId,
+      card_title:curCardData?.title||'',
+      from_email:curCardData?.owner_email||user.email,
+      from_member_no:curCardData?.owner_member_no||null,
+      to_email:toEmail,
+      to_member_no:toNo,
+      fee_mode:isFree?'free':'paid',
+      fee: isFree?0:29,
+      fee_amount: isFree?0:29,
+      slip_url:slipUrl,
+      status:isFree?'approved':'pending_slip',
+      created_by:user.email
+    };
+
+    const {error}=await supa.from('ownership_transfers').insert(payload);
+    if(error) throw error;
+
+    if(isFree && curCardData){
+      await supa.from('cards').update({owner_email:payload.to_email, owner_member_no:payload.to_member_no||curCardData.owner_member_no, updated_at:new Date().toISOString()}).eq('qr_code',payload.card_id);
+    }
+
+    document.getElementById('freeBox').classList.add('hidden');
+    document.getElementById('paidBox').classList.add('hidden');
+    document.getElementById('successBox').classList.remove('hidden');
+    document.getElementById('goCard').href='/card?qr='+encodeURIComponent(payload.card_id);
+
+  }catch(e){showModal('ไม่สำเร็จ: '+e.message);console.error(e);}
+  btn.innerText=orig;btn.disabled=false;
+}
+
+document.getElementById('freeConfirmBtn').onclick=()=>submitTransfer(true);
+document.getElementById('submitSlipBtn').onclick=()=>submitTransfer(false);
+
+// FIXED CLAIM FLOW: สำหรับคนถือการ์ดจริงแต่นอกระบบเปลี่ยนมือหลายทอด
+function showClaimBox(){
+  document.getElementById('claimBox').classList.remove('hidden');
+  document.getElementById('freeBox').classList.add('hidden');
+  document.getElementById('paidBox').classList.add('hidden');
+  document.getElementById('notOwnerBox').classList.add('hidden');
+  document.getElementById('claimBox').scrollIntoView({behavior:'smooth'});
+}
+function showNotOwnerBox(currentOwnerText){
+  document.getElementById('notOwnerCurrent').innerText = currentOwnerText||'-';
+  document.getElementById('notOwnerBox').classList.remove('hidden');
+  document.getElementById('freeBox').classList.add('hidden');
+  document.getElementById('paidBox').classList.add('hidden');
+  document.getElementById('claimBox').classList.add('hidden');
+}
+
+document.getElementById('claimHoldFile')?.addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); const img=document.getElementById('claimHoldPreview'); img.src=url; img.classList.remove('hidden');
+});
+document.getElementById('claimEvidenceFile')?.addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); const img=document.getElementById('claimEvidencePreview'); img.src=url; img.classList.remove('hidden');
+});
+
+async function submitClaim(){
+  const btn=document.getElementById('claimSubmitBtn'); const orig=btn.innerText;
+  btn.innerText='⏳ กำลังอัปโหลดรูป...'; btn.disabled=true;
+  try{
+    const {data:{user}}=await supa.auth.getUser();
+    if(!user){ showModal('ล็อกอินก่อน'); location.href='https://www.cardmatem.store/'; return; }
+
+    // กันโอนซ้ำ
+    const {data:pendingExist}=await supa.from('ownership_transfers').select('id').eq('card_id', curCardId).in('status',['pending_slip','pending_claim']).maybeSingle();
+    if(pendingExist){ showModal('การ์ดใบนี้มีรายการโอนค้างรอแอดมินอนุมัติอยู่แล้ว ('+pendingExist.id+')'); btn.innerText=orig; btn.disabled=false; return; }
+
+    // Ban check คนรับ (คน Claim)
+    try{
+      let checkToNo = newOwnerData?newOwnerData.member_no:parseMemberNo(document.getElementById('newOwnerNo')?.value.trim()||'');
+      if(checkToNo){
+        const {data:toBan}=await supa.from('customers').select('is_banned,ban_reason').eq('member_no', checkToNo).maybeSingle();
+        if(toBan && toBan.is_banned){ showModal(`🚫 คนรับโอน ${formatMemberNo(checkToNo)} ถูกแบนอยู่: ${toBan.ban_reason||''}\nห้ามโอนให้คนแบน`); btn.innerText=orig; btn.disabled=false; return; }
+        try{
+          const checkToEmail = document.getElementById('newOwnerEmail')?.value.trim()||'';
+          if(checkToEmail){
+            const {data:toBanEmail}=await supa.from('customers').select('is_banned,ban_reason').eq('email', checkToEmail).maybeSingle();
+            if(toBanEmail && toBanEmail.is_banned){ showModal(`🚫 คนรับโอน (email) ถูกแบนอยู่: ${toBanEmail.ban_reason||''}\nห้ามโอนให้คนแบน`); btn.innerText=orig; btn.disabled=false; return; }
+          }
+        }catch(e){}
+      }
+    }catch(e){}
+
+    const holdFile=document.getElementById('claimHoldFile').files[0];
+    if(!holdFile){ showModal('📸 ต้องแนบรูปถือการ์ดจริง (เห็นหน้า+การ์ด) ก่อน'); btn.innerText=orig; btn.disabled=false; return; }
+
+    let holdUrl=null, evUrl=null;
+    // compress and upload
+    try{
+      const compressed=await compressImage(holdFile, 800);
+      const fname=`claims/${Date.now()}_hold_${holdFile.name.split('.')[0]}.webp`;
+      const {error}=await supa.storage.from('slips').upload(fname, compressed);
+      if(!error){ try{ const {data:pub}=supa.storage.from('slips').getPublicUrl(fname); holdUrl=pub.publicUrl; if(!holdUrl){ const {data:signed}=await supa.storage.from('slips').createSignedUrl(fname, 60*60*24*365); holdUrl=signed?.signedUrl||null; } }catch(e){} }
+    }catch(e){}
+    const evFile=document.getElementById('claimEvidenceFile').files[0];
+    if(evFile){
+      try{
+        const compressed=await compressImage(evFile, 800);
+        const fname=`claims/${Date.now()}_ev_${evFile.name.split('.')[0]}.webp`;
+        const {error}=await supa.storage.from('slips').upload(fname, compressed);
+        if(!error){ try{ const {data:pub}=supa.storage.from('slips').getPublicUrl(fname); evUrl=pub.publicUrl; if(!evUrl){ const {data:signed}=await supa.storage.from('slips').createSignedUrl(fname, 60*60*24*365); evUrl=signed?.signedUrl||null; } }catch(e){} }
+      }catch(e){}
+    }
+
+    // slip_url format: hold|evidence เพื่อให้ admin-transfers แสดง 2 ปุ่มได้
+    let slipCombined = holdUrl||'';
+    if(evUrl) slipCombined += '|' + evUrl;
+
+    const toEmail=document.getElementById('newOwnerEmail')?.value.trim()||user.email;
+    let toNo=newOwnerData?newOwnerData.member_no:null;
+    if(!toNo){
+      const rawNo=document.getElementById('newOwnerNo')?.value.trim()||'';
+      toNo=parseMemberNo(rawNo);
+    }
+    // ถ้าไม่ได้กรอกคนรับ ให้ถือว่าผู้ Claim เองคือผู้รับ
+    if(!toNo){
+      try{
+        const {data:me}=await supa.from('customers').select('member_no').eq('email', user.email).maybeSingle();
+        if(me) toNo=me.member_no;
+      }catch(e){}
+    }
+
+    const payload={
+      card_id:curCardData?.qr_code||curCardId,
+      card_title:curCardData?.title||'',
+      from_email:curCardData?.owner_email||'',
+      from_member_no:curCardData?.owner_member_no||null,
+      to_email:toEmail,
+      to_member_no:toNo,
+      fee_mode:'claim',
+      fee:0,
+      fee_amount:0,
+      slip_url:slipCombined,
+      status:'pending_claim',
+      created_by:user.email,
+      note:'Claim: เปลี่ยนมือหลายทอดนอกระบบ คนสุดท้ายถือการ์ดจริง'
+    };
+
+    const {error}=await supa.from('ownership_transfers').insert(payload);
+    if(error) throw error;
+
+    document.getElementById('claimBox').classList.add('hidden');
+    document.getElementById('freeBox').classList.add('hidden');
+    document.getElementById('paidBox').classList.add('hidden');
+    document.getElementById('successBox').classList.remove('hidden');
+    document.getElementById('goCard').href='/card?qr='+encodeURIComponent(payload.card_id);
+    showModal('✅ ส่ง Claim แล้ว! รอแอดมินตรวจสอบรูปถือการ์ดใน admin-transfers.html\nแอดมินจะอนุมัติแล้วเปลี่ยนเจ้าของให้');
+  }catch(e){ showModal('ไม่สำเร็จ: '+e.message); console.error(e); }
+  btn.innerText=orig; btn.disabled=false;
+}
+document.getElementById('claimSubmitBtn')?.addEventListener('click', submitClaim);
+
+
+// OVERRIDE free button to immediate transfer during promo
+const origFreeBtn = document.getElementById('freeConfirmBtn');
+if(origFreeBtn){
+  origFreeBtn.onclick = async ()=>{
+    try{
+      const params = new URLSearchParams(window.location.search);
+      const transferId = params.get('id');
+      const listingId = params.get('listing');
+      const cardParam = params.get('card') || (typeof curCardId!=='undefined'?curCardId:'') || (typeof curCardData!=='undefined'?curCardData?.qr_code:'');
+      let toNo = null, toEmail = '';
+      try{
+        if(typeof newOwnerData!=='undefined' && newOwnerData?.member_no) toNo = newOwnerData.member_no;
+        const noInput = document.getElementById('newOwnerNo')?.value.trim()||'';
+        if(!toNo && noInput) toNo = parseMemberNo(noInput);
+        toEmail = document.getElementById('newOwnerEmail')?.value.trim()||'';
+        if(!toEmail){
+          const {data:{user}} = await supa.auth.getUser();
+          toEmail = user?.email||'';
+        }
+        if(!toNo){
+          const {data:me}=await supa.from('customers').select('member_no').eq('email', toEmail).maybeSingle();
+          if(me) toNo=me.member_no;
+        }
+      }catch(e){}
+      
+      // FREE = โอนทันที
+      if(cardParam){
+        const upd = {owner_member_no: toNo, owner_email: toEmail, status:'owned', updated_at:new Date().toISOString()};
+        await supa.from('cards').update(upd).eq('qr_code', cardParam);
+      }
+      if(transferId){
+        await supa.from('ownership_transfers').update({status:'approved', approved_at:new Date().toISOString(), to_member_no:toNo, to_email:toEmail, fee_mode:'free', fee:0}).eq('id', transferId);
+      }
+      if(listingId){
+        await supa.from('market_listings').delete().eq('id', listingId);
+        await supa.from('market_cards').delete().eq('id', listingId);
+        await supa.from('market_cards').delete().eq('card_id', listingId);
+      }else if(cardParam){
+        await supa.from('market_listings').delete().eq('card_id', cardParam).eq('status','reserved');
+      }
+      showModal('✅ โอนฟรีสำเร็จ! เปลี่ยนเจ้าของทันที ไม่ต้องรอแอดมิน');
+      setTimeout(()=>{ window.location.href='/card?qr='+encodeURIComponent(cardParam||''); }, 1000);
+    }catch(e){ showModal('โอนฟรีไม่สำเร็จ: '+e.message); }
+  };
+}
+
+loadFee(); loadCard();
+
+</script>
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(confirm(msg) && onOk) onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+
+<script>
+
+// === FIXED FLOW: ซื้อเสร็จ > โอน ถ้าไม่โอนกดยกเลิกได้ - 2 ไฟล์เท่านั้น ===
+async function cancelTransfer(){
+  const params = new URLSearchParams(window.location.search);
+  const transferId = params.get('id');
+  const listingId = params.get('listing');
+  const cardParam = params.get('card');
+  if(!transferId){ showModal('ไม่พบ transfer id'); return; }
+  if(!confirm('ยกเลิกการโอน? การ์ดจะคืนเข้าตลาด + คืนโควต้า Raw 10 ใบ')) return;
+  try{
+    // Update transfer -> cancelled
+    await supa.from('ownership_transfers').update({status:'cancelled', cancelled_at:new Date().toISOString(), note:'ยกเลิกโดยผู้ซื้อ/ผู้ขาย - คืนตลาด'}).eq('id', transferId);
+    // Restore listing -> active
+    if(listingId){
+      await supa.from('market_listings').update({status:'active', buyer_member_no:null, buyer_email:null, reserved_at:null, updated_at:new Date().toISOString()}).eq('id', listingId);
+      await supa.from('market_cards').update({status:'active'}).eq('id', listingId);
+      await supa.from('market_cards').update({status:'active'}).eq('card_id', listingId);
+    }else{
+      // fallback by card_id
+      if(cardParam){
+        await supa.from('market_listings').update({status:'active', buyer_member_no:null, buyer_email:null}).eq('card_id', cardParam).eq('status','reserved');
+        await supa.from('market_cards').update({status:'active'}).eq('card_id', cardParam);
+      }
+    }
+    showModal('✅ ยกเลิกแล้ว - คืนการ์ดเข้าตลาด + คืนโควต้า Raw');
+    setTimeout(()=>{ window.location.href='/trade'; }, 1000);
+  }catch(e){ showModal('ยกเลิกไม่สำเร็จ: '+e.message); }
+}
+
+function addCancelButton(){
+  const box = document.getElementById('cardInfo');
+  if(!box) return;
+  if(document.getElementById('cancelTransferBtn')) return;
+  const btn = document.createElement('button');
+  btn.id='cancelTransferBtn';
+  btn.className='w-full mt-3 bg-zinc-800 border border-red-500/20 text-red-300 py-3 rounded-xl text-[12px] font-bold';
+  btn.innerText='❌ ยกเลิกการโอน - คืนการ์ดเข้าตลาด';
+  btn.onclick=cancelTransfer;
+  box.parentElement.appendChild(btn);
+  
+  // Banner 2 ไฟล์
+  const banner = document.createElement('div');
+  banner.className='mt-3 bg-cyan-500/10 border border-cyan-400/20 rounded-xl p-2.5 text-[10px] text-cyan-300 text-center';
+  banner.innerHTML='🔄 Flow 2 ไฟล์: trade.html (ซื้อ) → transfer-fee.html (โอน) | ถ้าไม่โอน กดยกเลิกได้ จะคืนโควต้า Raw 10 ใบทันที';
+  box.parentElement.prepend(banner);
+}
+setTimeout(addCancelButton, 800);
+
+// MANUAL SMS CHECK - พี่เช็ค SMS มือถือ 0999359990 เอง ไม่ต้องพึ่งระบบ
+// แก้ไข: ตัด SMS auto ออก เหลือแค่แจ้งเตือนให้แอดมินเช็คมือถือ
+function showManualSMSWarning(){
+  if(typeof showModal==='function'){
+    showModal('✅ ส่งสลิปแล้ว\n\n⚠️ พี่เช็ค SMS เงินเข้าในมือถือเครื่อง 0999359990 วสันต์ จิตพิมพ์ ด้วยตาเอง\n✅ ต้องเจอยอด 29 บาท เวลาไม่เกิน 15 นาที ถึงอนุมัติ\n❌ ถ้าไม่เจอ SMS อย่าอนุมัติ - สลิปปลอม');
+  }
+}
+</script>
+
+<script>
+// FIXแว๊ปหาย - restart shine on bfcache like index.html
+(function(){
+  function restartShine(){
+    document.querySelectorAll('.shine-red-beam, .shine-beam, .badge-4k').forEach(el=>{
+      el.style.animation='none';
+      void el.offsetWidth;
+      el.style.animation='';
+    });
+  }
+  window.addEventListener('pageshow', function(){ setTimeout(restartShine, 50); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(restartShine, 50); });
+  window.addEventListener('focus', function(){ setTimeout(restartShine, 50); });
+})();
+</script>
+
+</body></html>

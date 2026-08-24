@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ตรวจสอบการ์ดในระบบ Card Matem ง่าย ๆ - Card Matem</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Kanit',sans-serif;background:#050507;color:white}
+.gold-gradient{background:linear-gradient(90deg,#facc15 0%,#a855f7 100%)}
+.card-glow-yellow{box-shadow:inset 3px 0 0 #facc15, 0 0 20px rgba(250,204,21,0.1)}
+.card-glow-blue{box-shadow:inset 3px 0 0 #60a5fa, 0 0 20px rgba(96,165,250,0.1)}
+.card-glow-green{box-shadow:inset 3px 0 0 #34d399, 0 0 20px rgba(52,211,153,0.1)}
+.zoom-active{background:#facc15 !important;color:#000 !important;border-color:#facc15 !important;font-weight:900}
+@keyframes shineMove{0%{transform:translateX(-100%)}60%{transform:translateX(200%)}100%{transform:translateX(200%)}}
+.btn-3d{position:relative;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.2);transition:all .15s}
+.btn-3d:active{transform:translateY(1px);box-shadow:0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)}
+.btn-3d::after{content:'' ;position:absolute;top:0;left:0;width:40%;height:100%;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);transform:translateX(-100%);animation:shineMove 3s infinite}
+.btn-scan{filter:drop-shadow(0 0 8px rgba(250,204,21,0.4))}
+.btn-search{filter:drop-shadow(0 0 12px rgba(250,204,21,0.6))}
+</style>
+
+<script>
+// === CM D1/R2 FIX - UI เดิม 100% - แก้เฉพาะโค้ดดึงข้อมูล ===
+// FIXED V3 - using window.CM_R2_API
+const CM_R2_API = window.CM_R2_API || "https://r2-proxy.vasan-jitpim.workers.dev";
+const CM_D1_API = CM_R2_API + "/api";
+async function cmFetchD1(path, fallbackFn){
+  try{
+    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch(CM_D1_API + path, {cache:'no-store', signal: ctrl.signal});
+    if(r.ok){ const j = await r.json(); if(j) return j; }
+  }catch(e){}
+  if(typeof fallbackFn==='function'){ try{ return await fallbackFn(); }catch(e){} }
+  return [];
+}
+async function cmUploadR2(fileOrBlob, fileName, extra={}){
+  try{
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, fileName);
+    for(const k in extra) fd.append(k, extra[k]);
+    const r = await fetch(CM_R2_API, {method:'POST', body: fd});
+    const j = await r.json();
+    return j.url || j.image_url || null;
+  }catch(e){ return null; }
+}
+const CM_ADMIN_EMAIL = "vasan.jitpim@gmail.com";
+const CM_ADMIN_CM = "CM-0000";
+
+
+// === FIXED FLOW: Prevent duplicate binding - check owner_email is null ===
+async function canBindCard(qrCode){
+  try{
+    const {data} = await supa.from('cards').select('owner_email, owner_member_no, status').eq('qr_code', qrCode).maybeSingle();
+    if(!data) return {can:false, reason:'ไม่พบ QR นี้ในระบบ'};
+    if((data.owner_email && data.owner_email.trim()!=='') || (data.owner_member_no && String(data.owner_member_no).trim()!=='')){
+      return {can:false, reason:'การ์ดนี้มีเจ้าของแล้ว: '+(data.owner_email||data.owner_member_no)};
+    }
+    if(data.status && data.status!=='printed_blank'){
+      return {can:false, reason:'การ์ดนี้ถูกผูกไปแล้ว status: '+data.status};
+    }
+    return {can:true};
+  }catch(e){ return {can:true}; }
+}
+
+// === ADD: Show admin note to customer ===
+function cmShowAdminNote(desc){
+  const el = document.getElementById('adminNoteBox');
+  if(!el) return;
+  if(!desc){ el.innerHTML=''; el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const safe = desc.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  el.innerHTML = `<div class="bg-yellow-500/10 border-l-4 border-yellow-400 p-2.5 rounded-r-xl mt-2"><div class="text-[10px] font-bold text-yellow-300">📝 โน๊ตจากแอดมิน:</div><div class="text-[11px] text-yellow-100/90 mt-1 leading-relaxed">${safe}</div></div>`;
+}
+
+function cmIsAdmin(email, memberNo){
+  const e = (email||"").toLowerCase();
+  const cm = (memberNo||"").toString().toUpperCase();
+  return e===CM_ADMIN_EMAIL || cm===CM_ADMIN_CM || cm==="0" || cm==="CM-0000";
+}
+</script>
+
+</head>
+<body class="flex justify-center bg-black">
+<div class="w-full max-w-[720px] min-h-screen bg-[#0a0a0f] px-5 py-5 flex flex-col">
+  <div class="flex justify-between items-center">
+    <a href="https://www.cardmatem.store/" class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-black text-[10px]">CM</div><span class="font-black text-[14px]"><span class="text-yellow-400">Card</span> <span class="text-purple-400">Matem</span> <span class="text-[10px] text-zinc-500">CARD MATEM</span></span></a>
+    <div class="flex gap-2"><span id="authBadge" class="text-[9px] bg-zinc-800 px-2 py-1 rounded-full">เช็ค...</span><a href="https://www.cardmatem.store/" class="text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300">← หน้าแรก</a></div>
+  </div>
+
+
+
+  <div class="mt-4 bg-[#1e1c24] border border-white/5 rounded-[16px] p-5 card-glow-yellow">
+    <h1 class="text-[20px] font-black"><span class="bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent">ตรวจสอบการ์ดในระบบ Card Matem ง่าย ๆ</span></h1>
+    <p class="text-[11px] text-zinc-400 mt-1">สแกน QR หลังสลีฟ → เจอ 8 รูป RAW + เจ้าของ + ประวัติผ่านมากี่มือ • กันการ์ดผี</p>
+  </div>
+
+  <div class="mt-4 bg-[#1e1c24] border border-white/5 rounded-[16px] p-4 card-glow-blue">
+    <div class="flex gap-2">
+      <button id="scanBtn" class="flex-1 gold-gradient btn-3d btn-scan text-black font-black py-3.5 rounded-xl text-[12px]">📷 สแกนสด</button>
+      <label class="flex-1 bg-[#0a0a0f] border border-white/10 text-center py-3 rounded-xl text-[12px] text-zinc-300 cursor-pointer">🖼️ อัปโหลด<input id="fileInput" type="file" accept="image/*" capture="environment" class="hidden"></label>
+    </div>
+    <div id="reader" class="hidden mt-4 w-full bg-black rounded-xl overflow-hidden aspect-square"></div>
+    <div id="scanControls" class="hidden mt-3">
+      <div class="flex gap-2 flex-wrap items-center">
+        <button data-zoom="1" onclick="setZoom(1)" class="zoom-btn bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] text-zinc-400">1x</button>
+        <button data-zoom="2" onclick="setZoom(2)" class="zoom-btn bg-yellow-400 text-black px-4 py-2 rounded-full text-[11px] font-black">2x</button>
+        <button data-zoom="3" onclick="setZoom(3)" class="zoom-btn bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] text-zinc-400">3x</button>
+        <button id="torchBtn" onclick="toggleTorch()" class="bg-zinc-800 border border-white/10 px-3 py-2 rounded-full text-[10px]">🔦 เปิดไฟ</button>
+        <button onclick="refocus()" class="bg-zinc-800 border border-white/10 px-3 py-2 rounded-full text-[10px]">👆 โฟกัสใกล้</button>
+        <span id="zoomLabel" class="text-[10px] text-zinc-500 ml-1">2x • 8-12cm</span>
+      </div>
+      <div class="mt-2 text-[9px] text-zinc-500">💡 ถือห่าง 8-12cm QR 2-3cm กด 2x-3x สำหรับระยะ 5-10cm แตะจอเพื่อโฟกัสใหม่</div>
+    </div>
+    <div id="scanStatus" class="hidden mt-3 text-[11px] text-yellow-300 bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-2.5 text-center"></div>
+    <div class="mt-4 flex gap-2"><input id="qrInput" placeholder="ใส่รหัส เช่น ABC123 หรือ QR-xxx" class="flex-1 bg-[#0a0a0f] border border-white/10 rounded-xl px-4 py-3 text-[13px] outline-none focus:border-yellow-500 text-white placeholder:text-zinc-600 uppercase"><button onclick="loadCard(document.getElementById('qrInput').value)" class="gold-gradient btn-3d btn-search text-black px-6 py-3 rounded-xl text-[12px] font-black">ค้นหา</button></div>
+  </div>
+
+  <div id="cardResult" class="mt-4"></div>
+
+  <!-- Claim Modal -->
+  <div id="claimModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-[#1e1c24] border border-yellow-400/20 w-full max-w-[400px] rounded-[24px] p-6 relative max-h-[90vh] overflow-y-auto">
+      <button onclick="closeClaim()" class="absolute top-4 right-4 w-8 h-8 bg-white/5 rounded-full">✕</button>
+      <h2 class="text-[15px] font-black">👋 ฉันซื้อใบนี้มาแล้ว</h2>
+      <p class="text-[10px] text-zinc-400 mt-1">เจ้าของปัจจุบัน: <span id="claimCurrentOwner" class="text-white font-bold">-</span> → คุณ <span id="claimMe" class="text-yellow-300">-</span></p>
+      <div id="claimCardInfo" class="bg-white/[0.04] border border-white/5 p-2.5 rounded-xl mt-3 text-[11px]">-</div>
+      <div class="mt-4 space-y-3">
+        <div><label class="text-[10px] text-zinc-400">รูปการ์ดที่ถืออยู่ (ถ่ายคู่ QR หลังสลีฟ) *</label><input type="file" id="claimPhoto" accept="image/*" class="w-full mt-1 text-[11px] bg-zinc-900 border border-white/10 rounded-xl p-2"><img id="claimPhotoPreview" class="hidden w-full mt-2 rounded-xl border border-white/10 max-h-40 object-contain"></div>
+        <div><label class="text-[10px] text-zinc-400">หลักฐานซื้อขาย (แชท/สลิป) - ถ้ามี</label><input type="file" id="claimSlip" accept="image/*" class="w-full mt-1 text-[11px] bg-zinc-900 border border-white/10 rounded-xl p-2"><img id="claimSlipPreview" class="hidden w-full mt-2 rounded-xl border border-white/10 max-h-40 object-contain"></div>
+        <div><label class="text-[10px] text-zinc-400">หมายเหตุ</label><textarea id="claimNote" placeholder="ซื้อมาจากไหน วันไหน" class="w-full mt-1 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-[11px] h-[60px] outline-none resize-none"></textarea></div>
+        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 text-center text-[11px] text-emerald-300">🎉 แจ้งเปลี่ยนเจ้าของฟรี - แอดมินอนุมัติแล้วได้เป็นเจ้าของทันที + ประวัติเพิ่ม 1 มือ • กันเคลมซ้ำ</div>
+        <div class="grid grid-cols-2 gap-2 mt-2"><button onclick="closeClaim()" class="bg-zinc-800 border border-white/10 py-3 rounded-xl text-[12px]">ยกเลิก</button><button onclick="submitClaim()" id="claimBtn" class="bg-yellow-400 text-black font-black py-3 rounded-xl text-[12px]">ส่งคำร้อง 📤</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL='https://mgandefbbgvlfqqzfnoe.supabase.co';
+const SUPABASE_KEY='sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+const supa = window.supa || (window.getSupa ? window.getSupa() : null); // FIXED V3 singleton
+let currentCard=null, html5QrcodeScanner=null, isScanning=false, currentZoom=2, torchOn=false;
+// SECURE OWNER CHECK: ห้ามใช้ window.__isOwner ตัดสินสิทธิ์ ให้ใช้ data.owner_member_no เทียบกับ customers.member_no จาก Supabase จริง
+const ADMIN_EMAILS=['vasan.jitpim@gmail.com','cardmatem@gmail.com','jellopy2ea@gmail.com','dekchaimaten@gmail.com','admin@cardmatem.store','vasan.jitpim@gmail.com'];
+
+function formatMemberNo(no){ if(no==null) return '-'; return 'CM-'+String(no).padStart(4,'0'); }
+
+async function checkAuthBadge(){
+  try{
+    const {data:{user}}=await supa.auth.getUser();
+    window.__currentUser=user;
+    if(!user){ document.getElementById('authBadge').innerText='ไม่ได้ล็อกอิน'; return; }
+    const isAdmin=ADMIN_EMAILS.includes((user.email||'').toLowerCase()) || (user.email||'').toLowerCase()=== 'vasan.jitpim@gmail.com';
+    document.getElementById('authBadge').innerText=isAdmin?user.email.split('@')[0]+' ✅ Admin':user.email.split('@')[0];
+    document.getElementById('authBadge').className=isAdmin?'text-[9px] bg-emerald-500 text-black px-2 py-1 rounded-full font-black':'text-[9px] bg-zinc-700 px-2 py-1 rounded-full';
+  }catch(e){}
+}
+
+async function updateCardStatus(qr, newStatus){
+  if(!qr) qr=currentCard?.qr_code;
+  if(!qr){ showModal('ไม่พบ QR'); return; }
+  if(newStatus==='OnPSA'){
+    if(currentCard?.status==='OnPSA'){ showModal('การ์ดใบนี้ส่ง PSA ไปแล้ว ('+currentCard.qr_code+') อยู่ใน psa.html แล้ว'); return; }
+    if(!showModalConfirm(`ยืนยันส่ง PSA Japan ใบ ${qr} ?\n\nระบบจะ:\n1. สร้างบิล PSA-JP-xxxx อัตโนมัติ\n2. ผูกการ์ด ${qr} กับบิล\n3. ซ่อนจาก trade.html (status OnPSA)\n4. ลูกค้าเช็คได้ใน psa.html`)) return;
+    try{
+      const card=currentCard;
+      const memberNo=card?.owner_member_no||null;
+      // ✅ FIXED: ใช้ sequence แทน random เพื่อกันบิลซ้ำ
+      const {data:seqData}=await supa.rpc('nextval_psa_code').catch(()=>({data:null}));
+      // fallback ถ้าไม่มี rpc ให้ใช้ timestamp + random ที่ยาวขึ้น
+      const newCode=seqData ? `PSA-JP-${seqData}` : `PSA-JP-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${qr.slice(-4)}-${String(Math.floor(Math.random()*9000)+1000)}`;
+      const due=new Date(Date.now()+75*86400000).toISOString().slice(0,10);
+      const memberCode=memberNo ? formatMemberNo(memberNo) : (card?.owner_email||'CM-0000');
+      let payload={code:newCode, member_no:memberCode, customer_code:memberCode, status:'ตรวจสอบ', due_date:due, card_count:1, card_qr_code:qr, card_title:card?.title||qr};
+      let {error:insErr}=await supa.from('psa_submissions').insert(payload);
+      if(insErr && insErr.message.includes('card_qr_code')){
+        delete payload.card_qr_code; delete payload.card_title;
+        const r2=await supa.from('psa_submissions').insert(payload);
+        insErr=r2.error;
+        if(!insErr) showModal('สร้างบิลแล้ว แต่ยังไม่มีคอลัมน์ card_qr_code - รัน SQL PSA_LINK_SQL.sql ก่อนเพื่อให้ผูกการ์ดได้');
+      }
+      if(insErr) throw insErr;
+      const {error}=await supa.from('cards').update({status:'OnPSA', updated_at:new Date().toISOString()}).eq('qr_code', qr);
+      if(error) throw error;
+      showModal(`สร้างบิล PSA ${newCode} ผูกกับ ${qr} แล้ว ✅\nกำลังไปหน้า PSA`);
+      window.open(`psa.html?code=${newCode}`,'_blank');
+      loadCard(qr);
+      return;
+    }catch(e){ showModal('สร้างบิล PSA ไม่สำเร็จ: '+e.message); return; }
+  }
+  if(!showModalConfirm(`ยืนยันเปลี่ยน ${qr} เป็น ${newStatus} ?\nTrade จะซ่อนทันที แต่ QR + 8 รูป + ประวัติยังอยู่ครบ`)) return;
+  try{
+    const {error}=await supa.from('cards').update({status:newStatus, updated_at:new Date().toISOString()}).eq('qr_code', qr);
+    if(error) throw error;
+    showModal(`เปลี่ยนเป็น ${newStatus} แล้ว ✅`);
+    loadCard(qr);
+  }catch(e){ showModal('เปลี่ยนไม่สำเร็จ: '+e.message); }
+}
+
+async function loadCard(qr){
+ if(!qr){showModal('ใส่รหัสก่อน');return;}
+ qr=qr.trim().toUpperCase().replace('QR-','').replace('CM-','');
+ const resultDiv=document.getElementById('cardResult');
+ resultDiv.innerHTML='<div class="bg-[#1e1c24] border border-white/5 rounded-[16px] p-6 text-center text-[13px] text-zinc-400">กำลังค้นหา '+qr+'...</div>';
+ window.__isOwnerSecure /* FIXED: ต้องเช็คจาก data.owner_member_no == currentMemberNo จาก DB */=false;
+ window.__isBannedOwner=false;
+ try{ const {data:{user}}=await supa.auth.getUser(); window.__currentUser=user; }catch(e){}
+ try{
+  const {data, error}=await supa.from('cards').select('*').eq('qr_code', qr).maybeSingle();
+  if(error) throw error;
+  if(!data){
+   const {data:likeData}=await supa.from('cards').select('*').ilike('qr_code', `%${qr}%`).limit(5);
+   if(likeData&&likeData.length>0){ resultDiv.innerHTML=likeData.map(c=>renderCard(c,[],'')).join(''); return; }
+   resultDiv.innerHTML=`<div class="bg-[#1e1c24] border border-red-500/20 rounded-[16px] p-6 text-center"><div class="text-[18px]">❌</div><div class="text-[13px] font-bold text-white mt-2">ไม่พบข้อมูล ${qr}</div><div class="text-[11px] text-zinc-500 mt-1">QR นี้ยังไม่ได้ปริ้นท์ใน qr-print.html หรือยังไม่ได้สร้างใน admin-add-card.html</div></div>`; return;
+  }
+  currentCard=data;
+  let transfers=[];
+  try{ const {data:trans}=await supa.from('ownership_transfers').select('*').eq('card_id', data.qr_code).order('created_at',{ascending:true}); transfers=trans||[]; }catch(e){}
+  let ownerName=''; let ownerBan=null;
+  if(data.owner_member_no){
+    try{ const {data:owner}=await supa.from('customers').select('display_name,member_no,is_banned,ban_reason').eq('member_no', data.owner_member_no).maybeSingle(); if(owner){ ownerName=owner.display_name; ownerBan=owner; if(owner.is_banned) window.__isBannedOwner=true; } }catch(e){}
+  }
+  try{
+    const u=window.__currentUser;
+    if(u){
+      if(data.owner_email && u.email && data.owner_email.toLowerCase()===u.email.toLowerCase()) window.__isOwnerSecure /* FIXED: ต้องเช็คจาก data.owner_member_no == currentMemberNo จาก DB */=true;
+      if(!window.__isOwnerSecure /* FIXED: ต้องเช็คจาก data.owner_member_no == currentMemberNo จาก DB */ && data.owner_member_no){
+        const {data:me}=await supa.from('customers').select('member_no').eq('email', u.email).maybeSingle();
+        if(me && me.member_no===data.owner_member_no) window.__isOwnerSecure /* FIXED: ต้องเช็คจาก data.owner_member_no == currentMemberNo จาก DB */=true;
+      }
+      if(u.email && ADMIN_EMAILS.includes(u.email.toLowerCase())){ /* FIXED */ }
+    }
+  }catch(e){}
+  resultDiv.innerHTML=renderCard(data, transfers, ownerName, ownerBan);
+ }catch(e){ resultDiv.innerHTML=`<div class="bg-[#1e1c24] border border-red-500/20 rounded-[16px] p-5 text-center text-[12px] text-red-300">Error: ${e.message}</div>`; }
+}
+
+function renderCard(c, transfers=[], ownerName='', ownerBan=null){
+  const isBlank=c.status==='printed_blank';
+  const photos=c.raw_photos||{};
+  const has8=photos ? Object.keys(photos).length : 0;
+  let photoHtml='';
+  if(isBlank){
+    photoHtml=`<div class="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-4 text-center mt-4"><div class="text-[13px] font-bold text-yellow-300">📦 QR เปล่า พร้อมใช้งาน</div><div class="text-[11px] text-zinc-400 mt-1">QR ${c.qr_code} ถูกปริ้นท์แล้ว รอผูกการ์ด + เจ้าของ ใน admin-add-card.html</div></div>`;
+  }else if(has8>0){
+    const labels={1:"หน้าเต็มใบ",2:"หลังเต็มใบ",3:"หน้า Center",4:"หลัง Center",5:"UV หน้า",6:"UV หลัง",7:"ตำหนิ วงแดง หน้า",8:"ตำหนิ วงแดง หลัง"};
+    // รองรับทั้ง object {1:url,2:url} และ array [url,url]
+    let entries=[];
+    if(Array.isArray(photos)){ entries=photos.map((url,i)=>[i+1,url]); }
+    else { entries=Object.entries(photos).sort((a,b)=>parseInt(a[0])-parseInt(b[0])); }
+    photoHtml='<div class="mt-4"><div class="text-[11px] font-bold text-blue-300 mb-2">🖼️ รูป 4K - '+has8+'/8 รูป • R2</div><div class="grid grid-cols-2 gap-2">'+entries.map(([k,url])=>{ if(!url) return ''; return `<div class="bg-black rounded-xl border border-white/10 overflow-hidden"><img src="${url}" loading="lazy" class="w-full aspect-[4/3] object-cover"><div class="text-[8px] text-center py-1 bg-[#16121f] text-zinc-400">${labels[k]||'รูป '+k}</div></div>`; }).join('')+'</div></div>';
+    if(c.image_url && !photos[1] && !Array.isArray(photos)) photoHtml+=`<div class="mt-2"><img src="${c.image_url}" class="w-full rounded-xl border border-white/10"></div>`;
+  }else{
+    photoHtml=(c.image_url?`<img src="${c.image_url}" class="mt-4 w-full rounded-xl border border-white/10">`:'')+(c.image_back_url?`<img src="${c.image_back_url}" class="mt-2 w-full rounded-xl border border-white/10">`:'');
+    if(!photoHtml) photoHtml='<div class="mt-3 bg-zinc-900 border border-white/5 rounded-xl p-3 text-center text-[11px] text-zinc-500">ยังไม่มีรูป RAW • ไปถ่าย 8 รูปใน admin-add-card.html</div>';
+  }
+
+  let ownerHtml='';
+  if(c.owner_member_no){
+    if(ownerBan && ownerBan.is_banned){
+      ownerHtml=`<div class="mt-3 bg-red-600/20 border border-red-500/50 rounded-xl p-3"><div class="flex justify-between items-center"><div><div class="text-[9px] bg-red-500 text-white px-2 py-0.5 rounded-full font-black inline-block">🚫 BANNED - อายัด</div><div class="text-[13px] font-black text-red-200 mt-1">${formatMemberNo(c.owner_member_no)} ${ownerName||''} ถูกแบน</div><div class="text-[10px] text-red-300/70">เหตุผล: ${ownerBan.ban_reason||'-'}</div><div class="text-[10px] text-zinc-500">${c.owner_email||''}</div></div><div class="text-[10px] bg-red-500 text-white px-2 py-1 rounded-full font-bold">อายัด</div></div><div class="text-[9px] text-red-300 mt-2">การ์ดใบนี้ถูกอายัด ห้ามโอน ซื้อขาย จนกว่าจะปลดแบนใน admin-members V5</div></div>`;
+    }else{
+      ownerHtml=`<div class="mt-3 bg-[#16121f] border border-yellow-400/20 rounded-xl p-3 flex justify-between items-center"><div><div class="text-[10px] text-zinc-500">เจ้าของปัจจุบัน ${c.owner_member_no>=0?`• Sequence กันซ้ำ ${formatMemberNo(c.owner_member_no)}`:''}</div><div class="text-[13px] font-black text-yellow-300">${formatMemberNo(c.owner_member_no)} ${ownerName||''}</div><div class="text-[10px] text-zinc-500">${c.owner_email||''}</div></div><div class="text-[10px] bg-yellow-400 text-black px-2 py-1 rounded-full font-bold">${c.rarity||''} ${c.condition||''}</div></div>`;
+    }
+  }else if(!isBlank){
+    ownerHtml=`<div class="mt-3 bg-zinc-900 border border-white/10 rounded-xl p-3 text-[11px] text-zinc-500 text-center">ยังไม่มีเจ้าของ • ${c.status||''}</div>`;
+  }
+
+  let historyHtml='';
+  if(transfers.length){
+    historyHtml=`<div class="mt-4 bg-[#1e1c24] border border-white/5 rounded-xl p-3"><div class="text-[11px] font-bold mb-2">📜 ประวัติ ${transfers.length} มือ • กันการ์ดผี</div><div class="space-y-1">${transfers.map((t,i)=>`<div class="flex gap-2 text-[10px]"><span class="text-zinc-500">${i+1}.</span><span class="text-zinc-300">${formatMemberNo(t.from_member_no)} → ${formatMemberNo(t.to_member_no)}</span><span class="text-zinc-500">${new Date(t.created_at).toLocaleDateString('th-TH')} • ${t.fee_mode||''} ${t.status||''}</span></div>`).join('')}</div></div>`;
+  }
+
+  const isOwner=window.__isOwnerSecure /* FIXED: ต้องเช็คจาก data.owner_member_no == currentMemberNo จาก DB */;
+  const isBanned=window.__isBannedOwner || (ownerBan && ownerBan.is_banned);
+  let actionHtml='';
+  if(isBanned){
+    actionHtml=`<div class="mt-4 bg-red-900/30 border border-red-500/40 rounded-xl p-4 text-center"><div class="text-[13px] font-black text-red-300">🚫 การ์ดถูกอายัด - เจ้าของถูกแบน</div><div class="text-[10px] text-red-300/60 mt-1">ห้ามโอน ห้ามขาย ห้ามเคลม จนกว่าแอดมินจะปลดแบนใน admin-members V5</div><button onclick="shareCard()" class="mt-3 bg-zinc-800 border border-white/10 py-2 px-4 rounded-full text-[11px]">🔗 แชร์</button></div>`;
+  }else if(isOwner){
+    actionHtml=`<div class="mt-4 grid grid-cols-2 gap-2"><button onclick="updateCardStatus('${c.qr_code}','Sold')" class="bg-zinc-800 border border-white/10 py-2.5 rounded-xl text-[11px]">💰 ขายแล้ว</button><button onclick="updateCardStatus('${c.qr_code}','OnPSA')" class="bg-blue-600 text-white py-2.5 rounded-xl text-[11px] font-bold">ส่ง PSA Japan</button><button onclick="goTransferOwner('${c.qr_code}')" class="bg-yellow-400 text-black font-black py-2.5 rounded-xl text-[11px]">โอนเจ้าของ 29฿</button><button onclick="shareCard()" class="bg-zinc-800 border border-white/10 py-2.5 rounded-xl text-[11px]">🔗 แชร์</button></div>`;
+  }else{
+    actionHtml=`<div class="mt-4 grid grid-cols-2 gap-2"><button onclick="openClaim('${c.qr_code}')" class="bg-yellow-400 text-black font-black py-3 rounded-xl text-[12px] col-span-2">👋 ฉันซื้อใบนี้มาแล้ว - แจ้งเป็นเจ้าของ</button><button onclick="shareCard()" class="bg-zinc-800 border border-white/10 py-2.5 rounded-xl text-[11px]">🔗 แชร์การ์ด</button><a href="/member?cm=${c.owner_member_no||''}" class="bg-zinc-800 border border-white/10 py-2.5 rounded-xl text-[11px] text-center">👤 ดูเจ้าของ</a></div>`;
+  }
+
+  return `<div class="bg-[#1e1c24] border border-white/5 rounded-[20px] p-4 mt-2">
+    <div class="flex justify-between items-start"><div><div class="text-[14px] font-black text-white">${c.title||c.name||c.qr_code}</div><div class="text-[10px] text-zinc-500 mt-1">${c.qr_code} • ${c.status||''} • ${c.grading||''}</div></div><div class="bg-zinc-800 px-2 py-1 rounded-full text-[9px]">${c.category||''}</div></div>
+    ${photoHtml}
+    ${ownerHtml}
+    ${historyHtml}
+    <div class="mt-3 text-[11px] text-zinc-400 bg-[#0a0a0f] border border-white/5 rounded-xl p-3">${c.description||'ไม่มีรายละเอียด'}</div>
+    ${actionHtml}
+  </div>`;
+}
+
+function shareCard(){ if(!currentCard){navigator.clipboard.writeText(window.location.href); showModal('คัดลอกลิงก์แล้ว'); return;} const url=window.location.href.split('?')[0]+'?qr='+(currentCard.qr_code); if(navigator.share){navigator.share({title:currentCard.title, url});} else{navigator.clipboard.writeText(url); showModal('คัดลอกลิงก์แล้ว: '+url);} }
+function goTransferOwner(id){ const cid=id||currentCard?.qr_code||document.getElementById('qrInput').value; if(!cid){showModal('ใส่รหัสการ์ด');return;} if(showModalConfirm('โอน '+cid+' 29 บาท ไปต่อ?')) location.href='/transfer-fee?card_id='+encodeURIComponent(cid); }
+
+// Claim
+function openClaim(qr){
+  const u=window.__currentUser;
+  if(!u){ showModal('กรุณาล็อกอินก่อนแจ้งเป็นเจ้าของ'); location.href='https://www.cardmatem.store/'; return; }
+  document.getElementById('claimCardInfo').innerText=(currentCard?.title||qr)+' • '+qr;
+  document.getElementById('claimCurrentOwner').innerText=formatMemberNo(currentCard?.owner_member_no)+' '+(currentCard?.owner_email||'');
+  document.getElementById('claimMe').innerText=u.email;
+  document.getElementById('claimModal').classList.remove('hidden');
+}
+function closeClaim(){ document.getElementById('claimModal').classList.add('hidden'); }
+document.getElementById('claimPhoto')?.addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); const img=document.getElementById('claimPhotoPreview'); img.src=url; img.classList.remove('hidden'); });
+document.getElementById('claimSlip')?.addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f); const img=document.getElementById('claimSlipPreview'); img.src=url; img.classList.remove('hidden'); });
+
+async function submitClaim(){
+  const qr=currentCard?.qr_code; if(!qr){ showModal('ไม่พบ QR'); return; }
+  const u=window.__currentUser; if(!u){ showModal('ล็อกอินก่อน'); return; }
+  const photoFile=document.getElementById('claimPhoto').files[0];
+  if(!photoFile){ showModal('ถ่ายรูปการ์ดที่ถืออยู่ก่อน (คู่ QR)'); return; }
+  const btn=document.getElementById('claimBtn'); btn.innerText='⏳ กำลังส่ง...'; btn.disabled=true;
+  try{
+    // ✅ FIXED: กันเคลมซ้ำ ถ้ามี pending_claim อยู่แล้วไม่ให้ส่งซ้ำ
+    const {data:existing}=await supa.from('ownership_transfers').select('id').eq('card_id', qr).eq('to_email', u.email).eq('status','pending_claim').maybeSingle();
+    if(existing){ showModal('คุณแจ้งเป็นเจ้าของใบนี้ไปแล้ว รอแอดมินอนุมัติ'); closeClaim(); btn.innerText='ส่งคำร้อง 📤'; btn.disabled=false; return; }
+
+    let myMemberNo=null;
+    try{ const {data:me}=await supa.from('customers').select('member_no').eq('email', u.email).maybeSingle(); if(me) myMemberNo=me.member_no; }catch(e){}
+    let photoUrl=null, slipUrl=null;
+    const upload=async(file,prefix)=>{
+      // ✅ FIXED: compress ก่อนอัปโหลด ลด 90%
+      const compressed=await compressImage(file, 800);
+      const ext='webp';
+      const name=`claims/${qr}_${prefix}_${Date.now()}.${ext}`;
+      const {error}=await supa.storage.from('slips').upload(name, compressed, {cacheControl:'3600', upsert:true});
+      if(error){
+        const {error:e2}=await supa.storage.from('pregrade_cards').upload(name, compressed, {cacheControl:'3600', upsert:true});
+        if(e2) throw e2;
+        const {data}=supa.storage.from('pregrade_cards').getPublicUrl(name); return data.publicUrl;
+      }
+      const {data}=supa.storage.from('slips').getPublicUrl(name); return data.publicUrl;
+    };
+    photoUrl=await upload(photoFile,'hold');
+    const slipFile=document.getElementById('claimSlip').files[0];
+    if(slipFile) slipUrl=await upload(slipFile,'evidence');
+    const combinedSlip=slipUrl ? (photoUrl+'|'+slipUrl) : photoUrl;
+    const note=document.getElementById('claimNote').value.trim();
+    const payload={ card_id:qr, card_title:currentCard?.title||qr, from_email:currentCard?.owner_email||null, from_member_no:currentCard?.owner_member_no||null, to_email:u.email, to_member_no:myMemberNo, fee:0, fee_mode:'claim', status:'pending_claim', slip_url:combinedSlip, note:note };
+    let {error}=await supa.from('ownership_transfers').insert(payload);
+    if(error && error.message.includes('note')){ delete payload.note; const r2=await supa.from('ownership_transfers').insert(payload); error=r2.error; }
+    if(error) throw error;
+    showModal('ส่งคำร้องแล้ว ✅\nแอดมินจะตรวจสอบรูปถือการ์ดจริงแล้วอนุมัติให้คุณเป็นเจ้าของใหม่ + ประวัติเพิ่ม 1 มือ');
+    closeClaim();
+  }catch(e){ showModal('ส่งไม่สำเร็จ: '+e.message); console.error(e); }
+  btn.innerText='ส่งคำร้อง 📤'; btn.disabled=false;
+}
+
+async function compressImage(file, maxW){
+  return new Promise((resolve)=>{
+    const img=new Image(); img.src=URL.createObjectURL(file);
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      let w=img.width, h=img.height;
+      if(w>maxW){ h*=maxW/w; w=maxW; }
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      canvas.toBlob((blob)=>resolve(blob), 'image/webp', 0.8);
+    };
+    img.onerror=()=>resolve(file);
+  });
+}
+
+// Scanner
+function toggleScan(){ if(isScanning){ stopScan(); return; } startScan(); }
+function startScan(){
+  const reader=document.getElementById('reader');
+  reader.classList.remove('hidden');
+  document.getElementById('scanControls').classList.remove('hidden');
+  document.getElementById('scanStatus').classList.remove('hidden');
+  document.getElementById('scanStatus').innerText='กำลังเปิดกล้อง... ถือ QR ห่าง 8-12cm';
+  html5QrcodeScanner=new Html5Qrcode("reader");
+  html5QrcodeScanner.start({facingMode:"environment"}, {fps:10, qrbox:{width:250,height:250}}, (decoded)=>{
+    document.getElementById('qrInput').value=decoded.split('qr=').pop().split('/').pop().split('?')[0];
+    loadCard(document.getElementById('qrInput').value);
+    stopScan();
+  }, (err)=>{}).catch(e=>{document.getElementById('scanStatus').innerText='เปิดกล้องไม่ได้: '+e+' • ลองอัปโหลดรูปแทน';});
+  isScanning=true;
+  document.getElementById('scanBtn').innerText='❌ ปิดกล้อง';
+}
+function stopScan(){ if(html5QrcodeScanner){ html5QrcodeScanner.stop().catch(()=>{}); html5QrcodeScanner=null; } document.getElementById('reader').classList.add('hidden'); document.getElementById('scanControls').classList.add('hidden'); isScanning=false; document.getElementById('scanBtn').innerText='📷 สแกนสด'; }
+async function scanFromPhoto(file){
+  if(!file) return;
+  try{
+    const temp=new Html5Qrcode("reader");
+    const result=await temp.scanFile(file,true);
+    document.getElementById('qrInput').value=result.split('qr=').pop().split('/').pop().split('?')[0];
+    loadCard(document.getElementById('qrInput').value);
+  }catch(e){ document.getElementById('scanStatus').classList.remove('hidden'); document.getElementById('scanStatus').innerText='อ่าน QR จากรูปไม่ได้: '+e; }
+}
+function setZoom(z){
+  currentZoom=z;
+  document.querySelectorAll('.zoom-btn').forEach(b=>{ b.className=b.dataset.zoom==z?'zoom-btn bg-yellow-400 text-black px-4 py-2 rounded-full text-[11px] font-black zoom-active':'zoom-btn bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] text-zinc-400'; });
+  document.getElementById('zoomLabel').innerText=z+'x • '+(z==1?'15-20cm':z==2?'8-12cm':'5-8cm');
+  // พยายามตั้ง zoom ผ่าน track ถ้า browser รองรับ
+  try{
+    const video=document.querySelector('#reader video');
+    if(video && video.srcObject){
+      const track=video.srcObject.getVideoTracks()[0];
+      if(track && track.getCapabilities && track.getCapabilities().zoom){
+        track.applyConstraints({advanced:[{zoom: z*2}]}).catch(()=>{});
+      }
+    }
+  }catch(e){}
+}
+function toggleTorch(){
+  torchOn=!torchOn;
+  document.getElementById('torchBtn').innerText=torchOn?'🔦 ปิดไฟ':'🔦 เปิดไฟ';
+  try{
+    const video=document.querySelector('#reader video');
+    if(video && video.srcObject){
+      const track=video.srcObject.getVideoTracks()[0];
+      if(track) track.applyConstraints({advanced:[{torch: torchOn}]}).catch(()=>{});
+    }
+  }catch(e){}
+}
+function refocus(){
+  try{
+    const video=document.querySelector('#reader video');
+    if(video && video.srcObject){
+      const track=video.srcObject.getVideoTracks()[0];
+      if(track) track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+    }
+    document.getElementById('scanStatus').innerText='โฟกัสใหม่แล้ว ถือ QR นิ่งๆ 8-12cm';
+  }catch(e){}
+}
+
+document.getElementById('scanBtn').onclick=toggleScan;
+document.getElementById('fileInput').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) scanFromPhoto(f); });
+window.addEventListener('DOMContentLoaded', async()=>{ await checkAuthBadge(); const qr=new URLSearchParams(window.location.search).get('qr')||new URLSearchParams(window.location.search).get('code'); if(qr){document.getElementById('qrInput').value=qr; loadCard(qr);} });
+</script>
+
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(confirm(msg) && onOk) onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+</body>
+</html>

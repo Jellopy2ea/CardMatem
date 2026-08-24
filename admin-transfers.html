@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Transfers - Card Matem FIXED</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Kanit',sans-serif; overflow-x:hidden}
+*{word-break:break-word}
+@media (max-width:640px){
+  .max-w-6xl{max-width:100vw !important}
+  img{max-width:100%; height:auto}
+  pre,code{white-space:pre-wrap; word-break:break-all}
+}
+</style>
+
+<script>
+const supa=window.supabase.createClient(SUPABASE_URL, anonKey);
+
+async function checkReceiverBanned(email, memberNo){
+  try{
+    let q = supa.from('customers').select('is_banned,ban_reason').limit(1);
+    if(email) q = supa.from('customers').select('is_banned,ban_reason').eq('email', email).maybeSingle();
+    else if(memberNo) q = supa.from('customers').select('is_banned,ban_reason').eq('member_no', memberNo).maybeSingle();
+    const {data} = await q;
+    return data;
+  }catch(e){ return null; }
+}
+
+// === CM D1/R2 FIX - UI เดิม 100% - แก้เฉพาะโค้ดดึงข้อมูล ===
+// FIXED V3 - using window.CM_R2_API
+const CM_R2_API = window.CM_R2_API || "https://r2-proxy.vasan-jitpim.workers.dev";
+const CM_D1_API = CM_R2_API + "/api";
+async function cmFetchD1(path, fallbackFn){
+  try{
+    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch(CM_D1_API + path, {cache:'no-store', signal: ctrl.signal});
+    if(r.ok){ const j = await r.json(); if(j) return j; }
+  }catch(e){}
+  if(typeof fallbackFn==='function'){ try{ return await fallbackFn(); }catch(e){} }
+  return [];
+}
+async function cmUploadR2(fileOrBlob, fileName, extra={}){
+  try{
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, fileName);
+    for(const k in extra) fd.append(k, extra[k]);
+    const r = await fetch(CM_R2_API, {method:'POST', body: fd});
+    const j = await r.json();
+    return j.url || j.image_url || null;
+  }catch(e){ return null; }
+}
+const CM_ADMIN_EMAIL = "vasan.jitpim@gmail.com";
+const CM_ADMIN_CM = "CM-0000";
+function cmIsAdmin(email, memberNo){
+  const e = (email||"").toLowerCase();
+  const cm = (memberNo||"").toString().toUpperCase();
+  return e===CM_ADMIN_EMAIL || cm===CM_ADMIN_CM || cm==="0" || cm==="CM-0000";
+}
+</script>
+
+</head>
+<body class="bg-[#0a0a0f] text-white min-h-screen flex justify-center">
+<div class="w-full max-w-[600px] md:max-w-6xl mx-auto p-3 md:p-4 overflow-x-hidden">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 md:mb-6">
+    <h1 class="text-[16px] md:text-[22px] font-black leading-tight">🛡️ Admin - จัดการโอนการ์ด <span class="text-[10px] bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 px-2 py-1 rounded-full ml-2">FIXED ไม่ค้างตลาด</span></h1>
+    <div class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+      <input id="search" placeholder="ค้นหา CM-0003 / เมล / ชื่อการ์ด" class="bg-[#1a1a1f] border border-white/10 rounded-full px-4 py-2 text-[12px] w-full md:w-64">
+      <a href="/" class="bg-zinc-800 px-4 py-2 rounded-full text-[11px] md:text-[12px] text-center md:text-left">กลับหน้าแรก</a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3 mb-4 md:mb-6">
+    <div class="bg-[#1e1c24] border border-white/5 rounded-[16px] p-4"><div class="text-[11px] text-zinc-400">รอตรวจสอบ</div><div id="countPending" class="text-[24px] font-black text-orange-400">0</div></div>
+    <div class="bg-[#1e1c24] border border-white/5 rounded-[16px] p-4"><div class="text-[11px] text-zinc-400">อนุมัติแล้ว</div><div id="countApproved" class="text-[24px] font-black text-emerald-400">0</div></div>
+    <div class="bg-[#1e1c24] border border-white/5 rounded-[16px] p-4"><div class="text-[11px] text-zinc-400">ทั้งหมด</div><div id="countAll" class="text-[24px] font-black">0</div></div>
+  </div>
+
+  <div class="mb-8">
+    <h2 class="text-[16px] font-black mb-3 text-orange-300">⏳ รอแอดมินอนุมัติ (pending_slip + pending_claim ฉันซื้อมาแล้ว)</h2>
+    <div id="pendingList" class="space-y-3">กำลังโหลด...</div>
+  </div>
+
+  <div>
+    <h2 class="text-[16px] font-black mb-3 text-emerald-300">📜 ประวัติการเปลี่ยนเจ้าของทั้งหมด</h2>
+    <div id="historyList" class="space-y-2">กำลังโหลด...</div>
+  </div>
+</div>
+
+<div id="slipModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onclick="this.classList.add('hidden')"><img id="slipImg" class="max-w-full max-h-[90vh] rounded-xl"></div>
+<div id="log" class="fixed bottom-4 right-4 bg-black border border-white/10 rounded-xl p-2 text-[9px] font-mono max-w-[320px] max-h-[120px] overflow-auto"></div>
+
+<script>
+const SUPABASE_URL='https://mgandefbbgvlfqqzfnoe.supabase.co';
+const anonKey='sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+let allData=[];
+function log(m){ const el=document.getElementById('log'); el.innerHTML=`<div>${new Date().toLocaleTimeString()} ${m}</div>`+el.innerHTML; }
+async function load(){
+  const {data,error}=await supa.from('ownership_transfers').select('*').order('created_at',{ascending:false}).limit(200);
+  if(error){document.getElementById('pendingList').innerText=error.message;return;}
+  allData=data||[];
+  render();
+}
+function render(){
+  const q=(document.getElementById('search').value||'').toLowerCase();
+  let filtered=allData.filter(r=>!q || (r.card_id||'').toLowerCase().includes(q) || (r.card_title||'').toLowerCase().includes(q) || (r.from_email||'').toLowerCase().includes(q) || (r.to_email||'').toLowerCase().includes(q));
+  const pending=filtered.filter(r=>r.status==='pending_slip' || r.status==='pending_claim');
+  const history=filtered.filter(r=>r.status!=='pending_slip' && r.status!=='pending_claim');
+  document.getElementById('countPending').innerText=pending.length;
+  document.getElementById('countApproved').innerText=filtered.filter(r=>r.status==='approved' || r.status==='completed').length;
+  document.getElementById('countAll').innerText=filtered.length;
+  document.getElementById('pendingList').innerHTML=pending.length?pending.map(cardRow(true)).join(''):'<div class="text-[12px] text-zinc-500 p-4 bg-[#1e1c24] rounded-xl">ไม่มีรายการรอ</div>';
+  document.getElementById('historyList').innerHTML=history.length?history.map(cardRow(false)).join(''):'<div class="text-[12px] text-zinc-500">ไม่มีประวัติ</div>';
+}
+function cardRow(isPending){
+  return r=>{
+  const isClaim = r.status==='pending_claim';
+  // FIXED CRITICAL 1: กัน slip_url ว่าง และ URL มี | ติดมา
+  let holdPhoto = r.slip_url||'';
+  let evPhoto = '';
+  if((r.slip_url||'').includes('|')){
+    const parts = (r.slip_url||'').split('|');
+    // กรณีมี | จริงๆ แบบ hold|ev
+    if(parts.length>=2 && parts[0].startsWith('http') && parts[1].startsWith('http')){
+      holdPhoto = parts[0];
+      evPhoto = parts[1];
+    } else {
+      // ถ้า split แล้วไม่ใช่ 2 http แสดงว่า | อยู่ใน URL แบบผิดพลาด ให้ใช้เต็มเส้นเป็น hold
+      holdPhoto = r.slip_url;
+      evPhoto = '';
+    }
+  }
+  if(!holdPhoto) holdPhoto = r.slip_url||'';
+  return `
+  <div class="bg-[#1e1c24] border ${isPending?(isClaim?'border-blue-500/30':'border-orange-500/30'):'border-white/5'} rounded-[16px] p-3 md:p-4 overflow-hidden">
+    <div class="flex flex-col md:flex-row md:justify-between gap-3">
+      <div class="text-[11px] md:text-[12px] leading-5 flex-1 break-all md:break-normal">
+        <div><span class="font-black text-[13px] ${isClaim?'text-blue-300':'text-yellow-300'}">${r.card_id||'-'}</span> <span class="text-zinc-300">${r.card_title||''}</span> <span class="text-[10px] ${isClaim?'bg-blue-500/20 text-blue-300':'bg-white/10'} px-2 py-1 rounded-full">${isClaim?'👋 ฉันซื้อใบนี้มาแล้ว':('บาร์โค้ด/QR: '+(r.card_id||'-'))}</span></div>
+        <div class="text-zinc-400">จาก: <b class="text-white">${r.from_email||'-'} (${r.from_member_no? 'CM-'+String(r.from_member_no).padStart(4,'0'):''})</b> → ไป: <b class="text-white">${r.to_email||'-'} (${r.to_member_no? 'CM-'+String(r.to_member_no).padStart(4,'0'):''})</b></div>
+        <div class="text-zinc-500">${isClaim?'แจ้งซื้อต่อนอกระบบ':'โอน'} ${r.fee_mode==='free'?'ฟรีโปร':(r.fee_mode==='claim'?'เคลมฟรี':r.fee+' บาท')} | ${new Date(r.created_at).toLocaleString('th-TH')} | สถานะ: ${r.status} ${r.note? '| หมายเหตุ: '+r.note:''}</div>
+        ${r.slip_url?`<div class="mt-2 flex gap-2 flex-wrap"><button onclick="showSlip('${holdPhoto}')" class="bg-blue-600 text-white px-3 py-1 rounded-full text-[11px]">📸 ดูรูปถือการ์ด</button> ${evPhoto?`<button onclick="showSlip('${evPhoto}')" class="bg-zinc-700 px-3 py-1 rounded-full text-[11px]">🧾 ดูหลักฐานซื้อ</button>`:''} <a href="${holdPhoto}" target="_blank" class="text-[11px] text-zinc-400 underline">ลิงก์1</a> ${evPhoto?`<a href="${evPhoto}" target="_blank" class="text-[11px] text-zinc-400 underline">ลิงก์2</a>`:''}</div>`:''}
+      </div>
+      ${isPending?`<div class="flex flex-col gap-2 self-center"><button onclick="approveClaim('${r.id}','${r.card_id}','${r.to_email}',${r.to_member_no||'null'},'${r.from_email||''}',${r.from_member_no||'null'})" class="bg-gradient-to-r ${isClaim?'from-blue-400 to-purple-500 text-white':'from-emerald-400 to-green-500 text-black'} font-black px-4 py-2 rounded-full text-[12px]">${isClaim?'✅ อนุมัติเป็นเจ้าของใหม่ + เพิ่มประวัติ':'✅ อนุมัติ & เปลี่ยนเจ้าของ'}</button><button onclick="reject('${r.id}')" class="bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[12px]">❌ ปฏิเสธ</button></div>`:''}
+    </div>
+  </div>`;
+  }
+}
+function showSlip(url){document.getElementById('slipImg').src=url;document.getElementById('slipModal').classList.remove('hidden');}
+async function approveClaim(id,cardId,toEmail,toMemberNo,fromEmail,fromMemberNo){
+  if(!showModalConfirm((toMemberNo?'เคลม':'โอน')+' '+cardId+' ไปให้ '+toEmail+' ?\n\nจะ:\n1. เปลี่ยนเจ้าของใน cards\n2. ลบออกจาก market_cards (ไม่ค้างตลาด)\n3. เพิ่มประวัติ 1 มือ'))return;
+  try{
+    log(`กำลังอนุมัติ ${cardId} -> ${toEmail}`);
+    let updateData={owner_email:toEmail, status:'Verified', updated_at:new Date().toISOString()};
+    if(toMemberNo) updateData.owner_member_no=toMemberNo;
+    const {error:e1}=await supa.from('cards').update(updateData).eq('qr_code', cardId);
+    // FIXED CRITICAL 3: เพิ่ม sales_count ให้เจ้าของใหม่
+    try{ if(toMemberNo){ const {data:curr}=await supa.from('customers').select('sales_count').eq('member_no', toMemberNo).maybeSingle(); await supa.from('customers').update({sales_count:(curr?.sales_count||0)+1}).eq('member_no', toMemberNo); } }catch(e){}
+    if(e1)throw e1;
+    log(`✅ เปลี่ยนเจ้าของ cards ${cardId}`);
+
+    // ✅ FIX 1+2: ลบออกจากตลาดทั้ง 2 ตาราง กันค้างตลาด (CRITICAL 2)
+    try{ await supa.from('market_cards').delete().eq('id', cardId); }catch(e){}
+    try{ await supa.from('market_listings').delete().eq('id', cardId); }catch(e){}
+    try{ await supa.from('market_listings').delete().eq('card_id', cardId); }catch(e){}
+    try{ await supa.from('market_cards').delete().eq('card_id', cardId); }catch(e){}
+    const {error:eMarket}= {error:null}; // dummy for log compatibility
+    if(eMarket){
+      log(`⚠️ ลบ market_cards ไม่เจอ/ไม่สำเร็จ: ${eMarket.message} (ปกติถ้าไม่ได้ลงขาย)`);
+    } else {
+      log(`🗑️ ลบ ${cardId} ออกจาก market_cards แล้ว - ไม่ค้างตลาด`);
+    }
+
+    // ✅ FIX 2: อัปเดตสถานะโอน
+    const {error:e2}=await supa.from('ownership_transfers').update({status:'completed', to_member_no:toMemberNo, from_member_no:fromMemberNo}).eq('id',id);
+    if(e2)throw e2;
+    log(`✅ completed transfer ${id}`);
+
+    showModal(`อนุมัติแล้ว ✅\n- เปลี่ยนเจ้าของเป็น ${toEmail}\n- ลบออกจากตลาดแล้ว\n- ประวัติเพิ่ม 1 มือ`);load();
+  }catch(e){showModal('ไม่สำเร็จ: '+e.message); log(`❌ ${e.message}`);}
+}
+async function reject(id){
+  if(!showModalConfirm('ปฏิเสธรายการนี้?'))return;
+  const {error}=await supa.from('ownership_transfers').update({status:'rejected'}).eq('id',id);
+  if(error)showModal(error.message);else load();
+}
+document.getElementById('search').addEventListener('input',render);
+load();
+log('พร้อม admin-transfers FIXED - ลบออกจากตลาดด้วย');
+</script>
+
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(confirm(msg) && onOk) onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<!-- FIXED SINGLE FILE - ใช้งานได้เลย -->
+<!-- แก้แว๊ปๆหาย: ใช้ DOM .shine-red-beam แบบ trade.html + ล๊อคกันย้อน bfcache -->
+<!-- LOCK กันย้อน: pageshow + visibilitychange + focus restart -->
+
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#facc15">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Card Matem">
+<link rel="apple-touch-icon" href="icon-black-gold-180.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Card Matem - Pregrade ระบบที่ดีที่สุด</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script> <!-- V2 Safe -->
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Kanit',sans-serif;background:#050507;color:white}
+.gold-gradient{background:linear-gradient(90deg,#facc15 0%,#a855f7 100%)}
+.card-glow-yellow{box-shadow:inset 3px 0 0 #facc15, 0 0 20px rgba(250,204,21,0.1)}
+.card-glow-orange{box-shadow:inset 3px 0 0 #fb923c, 0 0 20px rgba(251,146,60,0.1)}
+.card-glow-green{box-shadow:inset 3px 0 0 #34d399, 0 0 20px rgba(52,211,153,0.1)}
+.card-glow-blue{box-shadow:inset 3px 0 0 #60a5fa, 0 0 20px rgba(96,165,250,0.1)}
+.card-glow-red{box-shadow:inset 3px 0 0 #ef4444, 0 0 20px rgba(239,68,68,0.15)}
+#lineBtn, #fbBtn{position:relative;overflow:hidden;transition:all 0.2s; border:1px solid rgba(255,255,255,0.15); box-shadow:0 4px 12px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.25);}
+#lineBtn{background:linear-gradient(135deg,#06C755,#05a847,#048a3a) !important; box-shadow:0 4px 15px rgba(6,199,85,0.35), inset 0 1px 1px rgba(255,255,255,0.3) !important;}
+#fbBtn{background:linear-gradient(135deg,#1877F2,#1664d1,#124fb0) !important; box-shadow:0 4px 15px rgba(24,119,242,0.35), inset 0 1px 1px rgba(255,255,255,0.3) !important;}
+#installTopBtn, #installBottomBtn{white-space:nowrap; transition:all 0.2s;}
+#installTopBtn:active, #installBottomBtn:active{transform:scale(0.95);}
+
+.card-shine-red{position:relative!important;overflow:hidden!important;border:1px solid rgba(239,68,68,0.45)!important;isolation:isolate;background:#1e1c24!important;}
+.card-shine-red .shine-red-beam{position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(120deg,transparent,rgba(255,255,255,0.18),rgba(248,113,113,0.5),transparent);transform:skewX(-18deg);animation:shineRedTrade 2.5s infinite;pointer-events:none;z-index:3;will-change:left;}
+@keyframes shineRedTrade{0%{left:-100%}60%{left:130%}100%{left:130%}}
+.card-shine-red .pulse-dot{animation:pulseRed 1.8s infinite;}
+@keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.8)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0)}}
+
+</style>
+</head>
+<body class="flex justify-center bg-black">
+<div class="w-full max-w-[420px] min-h-screen bg-[#0a0a0f] relative flex flex-col px-5">
+
+<div class="flex justify-between items-center py-4">
+  <div class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-black text-[10px]">CM</div>
+    <span class="font-black text-[14px]"><span class="text-yellow-400">Card</span> <span class="text-purple-400">Matem</span></span>
+  </div>
+  <div class="flex gap-2 items-center">
+    <button id="installTopBtn" class="text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-yellow-400/30 text-yellow-300">เพิ่มไว้หน้าแรก</button>
+    <button id="topRegisterBtn" class="text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">สมัครสมาชิก</button>
+    <button id="topLoginBtn" class="text-[10px] px-3 py-1.5 rounded-full bg-yellow-400 text-black font-black">ล็อกอิน</button>
+    <button id="topLogoutBtn" class="hidden text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">ออก</button>
+  </div>
+</div>
+
+<div class="flex justify-center mb-4">
+  <div class="text-[9px] bg-yellow-400/10 border border-yellow-400/20 text-yellow-300 px-3 py-1 rounded-full">★ 4.9/5 จาก 2.1k รีวิว • ลูกค้าจริง • การ์ดจริง</div>
+</div>
+
+<!-- FIX QR: Banner สำหรับ LINE/FB - เพิ่มใหม่ ไม่ลบของเดิม -->
+<div id="inAppBanner" class="hidden"></div>
+
+<div class="text-center mb-5">
+  <h1 class="text-[40px] font-black leading-none tracking-tight"><span class="bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent">Card</span> <span class="bg-gradient-to-r from-orange-400 to-purple-500 bg-clip-text text-transparent">Matem</span></h1>
+  <p class="text-[10px] text-zinc-500 mt-2 tracking-widest">แกลเลอรีการ์ดแท้ | Pregrade ระบบที่ดีที่สุด</p>
+  <div id="userWelcome" class="hidden mt-3 text-[11px] bg-zinc-900 border border-white/10 py-2 px-3 rounded-xl text-center flex justify-center items-center gap-2"></div>
+</div>
+
+<div id="adminTopPanel" class="hidden mb-4">
+  <a href="/admin" class="block bg-gradient-to-r from-purple-600 to-pink-600 border border-purple-400/50 rounded-[16px] p-4 flex items-center justify-between min-h-[64px] shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+    <div class="flex gap-3 items-center"><div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-[14px]">🛡️</div><div><div class="text-[13px] font-black text-white">แผงควบคุมสำหรับ Admin</div><div class="text-[10px] text-purple-100">รวม 6 ระบบ • Pregrade • QR • โอน • PSA • สมาชิก</div></div></div><div class="text-white text-[18px]">›</div>
+  </a>
+</div>
+
+<div class="space-y-3 mb-8">
+  <a href="/raw" class="block bg-[#1e1c24] border border-white/5 rounded-[16px] p-4 flex items-center justify-between card-glow-yellow min-h-[64px]">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-yellow-400"></div><div class="w-6 h-6 rounded bg-zinc-800 flex items-center justify-center text-[10px]">◫</div></div><div><div class="text-[12.5px] font-bold text-yellow-300 flex items-center gap-1.5">Raw Studio ง่าย 3 ขั้นตอน <span class="text-[7px] bg-yellow-400 text-black px-1 py-0.5 rounded font-bold">STUDIO</span></div><div class="text-[10px] text-zinc-500 font-light tracking-wide">ส่ง ถ่าย-ระบบ QR-พร้อมลงขาย -เชคประวัติได้</div></div></div><div class="text-zinc-600">›</div>
+  </a>
+  <a href="/pregrade" data-locked="true" data-card="pregrade" class="block bg-[#1e1c24] border border-white/5 rounded-[16px] p-4 flex items-center justify-between card-glow-red card-shine-red min-h-[64px]" style="border-left:3px solid #ef4444">
+    <div class="shine-red-beam"></div>
+    <div class="flex gap-3 items-center relative z-[1]"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-red-500 pulse-dot"></div><div class="w-6 h-6 rounded bg-red-500 flex items-center justify-center text-[10px]">📸</div></div><div><div class="text-[12.5px] font-bold text-red-400 flex items-center gap-1.5 tracking-wide">ส่งการ์ด Pregrade ระบบ 4K <span class="text-[7px] bg-[#60a5fa] text-white px-1 py-0.5 rounded font-bold">4K</span></div><div class="text-[10px] text-zinc-400 font-light">ส่ง-ถ่ายภาพ-พร้อมขาย-ระบบสมาชิก</div></div></div><div class="text-red-400 relative z-[1]">›</div>
+  </a>
+  <a href="/psa" class="block bg-[#1e1c24] border border-white/5 rounded-[16px] p-4 flex items-center justify-between card-glow-orange min-h-[64px]">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-orange-400"></div><div class="w-6 h-6 rounded bg-zinc-800 flex items-center justify-center text-[10px]">◫</div></div><div><div class="text-[12.5px] font-bold text-orange-400 flex items-center gap-1.5">ส่งเกรด PSA Japan <span class="text-[7px] bg-yellow-400 text-black px-1 py-0.5 rounded font-black">PSA Japan</span></div><div class="text-[10px] text-zinc-500">ส่งตรงญี่ปุ่น ตัวจริง ปลอดภัย เช็คสถานะได้</div></div></div><div class="text-zinc-600">›</div>
+  </a>
+  <a href="/trade" data-locked="true" data-card="raw-market" class="block bg-[#1e1c24] border border-white/5 rounded-[16px] p-4 flex items-center justify-between card-glow-green min-h-[64px]">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-emerald-400"></div><div class="w-6 h-6 rounded bg-emerald-500 flex items-center justify-center text-[10px]">🛒</div></div><div><div class="text-[12.5px] font-semibold text-emerald-400 tracking-wide">Raw Market ตลาดการ์ด <span class="text-[7px] bg-emerald-400 text-black px-1.5 py-0.5 rounded font-black ml-1">NEW</span></div><div class="text-[10px] text-zinc-400 font-light">ซื้อขาย เชคง่าย ดูตำหนิ มีประวัติ ตลาดที่จริงใจ</div></div></div><div class="text-emerald-400">›</div>
+  </a>
+  <a href="/card" class="block bg-[#1e1c24] border border-blue-400/20 rounded-[16px] p-4 flex items-center justify-between card-glow-blue min-h-[64px]">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-blue-400"></div><div class="w-6 h-6 rounded bg-blue-900 flex items-center justify-center text-[10px]">🔍</div></div><div><div class="text-[12.5px] font-bold text-blue-300">เชค ตรวจสอบการ์ด ในระบบ</div><div class="text-[10px] text-zinc-500">สแกน QR ดูเจ้าของ • ประวัติ • ความแท้ในระบบ</div></div></div><div class="text-blue-400">›</div>
+  </a>
+</div>
+
+<div class="mt-auto pb-[100px] w-full">
+  <div class="text-[9px] text-zinc-600 text-center mb-2 tracking-widest">ติดต่อเรา</div>
+  <div class="flex gap-2 w-full">
+    <a id="lineBtn" href="#" target="_blank" class="flex-1 bg-[#06C755] text-white py-3.5 rounded-xl flex items-center justify-center gap-2 font-bold text-[13px]"><span class="w-4 h-4 bg-white rounded-full flex items-center justify-center text-[#06C755] text-[10px]">L</span> LINE</a>
+    <a id="fbBtn" href="#" target="_blank" class="flex-1 bg-[#1877F2] text-white py-3.5 rounded-xl flex items-center justify-center gap-2 font-bold text-[13px]"><span class="w-4 h-4 bg-white rounded-full flex items-center justify-center text-[#1877F2] text-[10px]">f</span> Facebook</a>
+  </div>
+</div>
+
+</div>
+
+<!-- BOTTOM FIXED - ตำแหน่งถูกต้องตามสเปค -->
+<div class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[420px] px-4 py-3 bg-[#0a0a0f]/95 backdrop-blur-md border-t border-white/5 flex justify-between items-center gap-2 z-30">
+  <div class="flex gap-2 items-center">
+    <button id="installBottomBtn" class="text-[11px] px-4 py-2.5 rounded-full bg-zinc-800 border border-yellow-400/30 text-yellow-300">เพิ่มไว้หน้าแรก</button>
+  </div>
+  <div class="flex gap-2 ml-auto items-center">
+    <button id="bottomLoginBtn" class="bg-zinc-800 border border-white/10 text-white text-[11px] px-5 py-2.5 rounded-full">ล็อกอิน</button>
+    <button id="bottomRegisterBtn" class="gold-gradient text-black text-[11px] font-black px-5 py-2.5 rounded-full">สมัครสมาชิก</button>
+  </div>
+</div>
+
+<div id="registerModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+  <div class="bg-[#16121f] border border-purple-500/20 w-full max-w-[400px] rounded-[24px] p-6 relative">
+    <button onclick="closeModal()" class="absolute top-4 right-4 w-8 h-8 bg-white/5 rounded-full">✕</button>
+    <h2 class="text-[18px] font-black mb-1">สมัครสมาชิก</h2>
+    <p class="text-zinc-500 text-[11px] mb-5">สมัครง่ายๆ สั่งของได้ทันที ไม่ต้องกรอกเยอะ</p>
+    <div id="modalUser" class="flex items-center gap-3 mb-5 bg-white/[0.04] border border-white/5 p-3 rounded-2xl">
+      <img id="modalAvatar" class="w-10 h-10 rounded-full bg-zinc-800"><div class="flex-1"><div id="modalName" class="font-bold text-[12px]">-</div><div id="modalEmail" class="text-[10px] text-zinc-400 truncate">-</div></div>
+      <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-full">✓ Google</span>
+    </div>
+    <div class="space-y-3">
+      <div><label class="text-[10px] text-zinc-400">เบอร์โทรศัพท์ *</label><input id="phone" class="w-full mt-1.5 bg-[#241e35] border border-white/10 rounded-xl px-4 py-3 text-[12px] outline-none" placeholder="08x-xxx-xxxx"></div>
+      <div><label class="text-[10px] text-zinc-400">LINE ID *</label><input id="lineId" class="w-full mt-1.5 bg-[#241e35] border border-white/10 rounded-xl px-4 py-3 text-[12px] outline-none" placeholder="@lineid หรือเบอร์"></div>
+      <div><label class="text-[10px] text-zinc-400">Facebook ลิงก์</label><input id="fbLink" class="w-full mt-1.5 bg-[#241e35] border border-white/10 rounded-xl px-4 py-3 text-[12px] outline-none" placeholder="https://facebook.com/..."></div>
+      <div><label class="text-[10px] text-zinc-400">ที่อยู่จัดส่ง *</label><textarea id="address" class="w-full mt-1.5 bg-[#241e35] border border-white/10 rounded-xl px-4 py-3 text-[12px] h-[70px] outline-none resize-none" placeholder="บ้านเลขที่ ตำบล อำเภอ จังหวัด"></textarea></div>
+      <button onclick="saveCustomer()" id="saveBtn" class="w-full gold-gradient text-black font-black py-3.5 rounded-xl text-[13px] mt-2">บันทึกข้อมูล → พร้อมส่งของได้เลย!</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal สอนติดตั้ง -->
+<div id="iosInstallModal" class="hidden fixed inset-0 bg-black/80 z-[60] flex items-end justify-center p-5">
+  <div class="bg-[#1e1c24] border border-white/10 rounded-[20px] p-5 w-full max-w-[360px]">
+    <div class="flex items-center gap-3 mb-4">
+      <img src="icon-black-gold-192.png" class="w-10 h-10 rounded-xl">
+      <div><div class="text-[13px] font-bold">เพิ่ม Card Matem ไว้หน้าแรก</div><div class="text-[10px] text-zinc-400">เข้าใช้งานได้ไวเหมือนแอป</div></div>
+    </div>
+    <div class="text-[11px] text-zinc-300 space-y-2 bg-zinc-900/50 p-3 rounded-xl">
+      <div id="iosText">1. กดเมนู ⋮ มุมขวาบน<br>2. เลือก เพิ่มไว้หน้าแรก<br>3. กด เพิ่ม</div>
+    </div>
+    <button onclick="document.getElementById('iosInstallModal').classList.add('hidden')" class="w-full mt-4 bg-zinc-800 py-3 rounded-xl text-[12px]">ปิด</button>
+  </div>
+</div>
+
+<script>
+const LINE_B64 = "aHR0cHM6Ly9saW5lLm1lL3RpL3AvNXF4TVd6Z19qVQ==";
+const FB_B64 = "aHR0cHM6Ly93d3cuZmFjZWJvb2suY29tL0Rla0NoYWlNYXRlbQ==";
+document.addEventListener('DOMContentLoaded', function(){
+  const lb = document.getElementById('lineBtn'); if(lb) lb.href = atob(LINE_B64);
+  const fb = document.getElementById('fbBtn'); if(fb) fb.href = atob(FB_B64);
+});
+const SUPABASE_URL = 'https://mgandefbbgvlfqqzfnoe.supabase.co';
+const anonKey = 'sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, anonKey);
+const modal = document.getElementById('registerModal');
+function openModal(){ modal.classList.remove('hidden'); }
+function closeModal(){ modal.classList.add('hidden'); }
+function formatMemberNo(no){ if(no===0 || no==='0') return 'CM-0000'; if(!no && no!==0) return 'CM-0000'; return 'CM-' + String(no).padStart(4,'0'); }
+
+let deferredPrompt = null;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || window.matchMedia('(display-mode: window-controls-overlay)').matches;
+const urlParams = new URLSearchParams(window.location.search);
+const isFromQR = urlParams.get('source') === 'qr';
+const isLine = /Line/i.test(navigator.userAgent);
+const isFB = /FBAN|FBAV|FB_IAB|FBAN\/Messenger/i.test(navigator.userAgent);
+const isMessenger = /Messenger/i.test(navigator.userAgent);
+const isInApp = isLine || isFB || isMessenger;
+let isAppInstalled = localStorage.getItem('pwa-installed') === '1';
+
+// ถ้ามีไอคอนแล้ว (standalone) ให้จำว่าติดตั้งแล้ว
+if(isStandalone){
+  isAppInstalled = true;
+  localStorage.setItem('pwa-installed', '1');
+}
+
+function updateInstallVisibility(){
+  const topBtn = document.getElementById('installTopBtn');
+  const bottomBtn = document.getElementById('installBottomBtn');
+  // มีไอคอนแล้ว -> ซ่อนปุ่ม (รูป 5-6-7)
+  if(isStandalone || isAppInstalled){
+    topBtn?.classList.add('hidden');
+    bottomBtn?.classList.add('hidden');
+    return;
+  }
+  // ยังไม่มีไอคอน -> โชว์ปุ่มเสมอ (รูป 1-2-3-4)
+  topBtn?.classList.remove('hidden');
+  bottomBtn?.classList.remove('hidden');
+}
+
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  console.log('beforeinstallprompt captured, fromQR:', isFromQR, 'isInApp:', isInApp);
+  // ถ้ามาจาก QR และอยู่ Chrome ปกติ -> Auto เด้งติดตั้งแบบรูปที่ 3
+  if(isFromQR && !isInApp && !isStandalone && !isAppInstalled){
+    setTimeout(()=>{
+      if(deferredPrompt){
+        console.log('Auto-trigger PWA install for QR');
+        handleInstallClick();
+      }
+    }, 1000);
+  }
+  updateInstallVisibility();
+});
+
+window.addEventListener('appinstalled', ()=>{
+  console.log('PWA installed');
+  isAppInstalled = true;
+  localStorage.setItem('pwa-installed', '1');
+  updateInstallVisibility();
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+  });
+}
+
+/* handleInstallClick defined below with white popup logic */
+
+// Cleaned duplicate listeners
+
+async function checkUser(){
+  const {data:{user}} = await supabaseClient.auth.getUser();
+  const welcome = document.getElementById('userWelcome');
+  const adminTopPanel = document.getElementById('adminTopPanel');
+  const ADMIN_EMAILS = ['vasan.jitpim@gmail.com'];
+  if(user){
+    document.getElementById('topLoginBtn').classList.add('hidden');
+    document.getElementById('topRegisterBtn').classList.add('hidden');
+    document.getElementById('bottomLoginBtn').classList.add('hidden');
+    document.getElementById('bottomRegisterBtn').classList.add('hidden');
+    document.getElementById('topLogoutBtn').classList.remove('hidden');
+    updateInstallVisibility(true);
+    const emailLower = (user.email||'').toLowerCase();
+    const isAdmin = ADMIN_EMAILS.includes(emailLower) || emailLower=== 'vasan.jitpim@gmail.com';
+    const {data} = await supabaseClient.from('customers').select('*').eq('email', user.email).maybeSingle();
+    const displayName = user.user_metadata.full_name || user.email || 'สมาชิก';
+    const hasMember = data && (data.member_no === 0 || data.member_no);
+    const memberBadge = hasMember ? formatMemberNo(data.member_no) : 'CM-0000';
+    const badge = `<span class="bg-yellow-400 text-black text-[9px] px-2 py-0.5 rounded-full font-black">${memberBadge}</span>`;
+    welcome.classList.remove('hidden');
+    welcome.innerHTML = `${badge}<span class="truncate">${displayName}</span>`;
+    welcome.classList.add('cursor-pointer','border-yellow-400/30','hover:bg-yellow-400/10','transition');
+    welcome.onclick = () => { window.location.href='/my-account'; };
+    document.getElementById('modalName').innerText = user.user_metadata.full_name || 'สมาชิก';
+    document.getElementById('modalEmail').innerText = user.email;
+    document.getElementById('modalAvatar').src = user.user_metadata.avatar_url || '';
+    if(isAdmin){ adminTopPanel?.classList?.remove('hidden'); } else { adminTopPanel?.classList?.add('hidden'); }
+    if(data){ document.getElementById('phone').value=data.phone||''; document.getElementById('lineId').value=data.line_id||''; if(document.getElementById('fbLink')) document.getElementById('fbLink').value=data.facebook_url||''; document.getElementById('address').value=data.address||''; }
+  } else {
+    document.getElementById('topLoginBtn').classList.remove('hidden');
+    document.getElementById('topRegisterBtn').classList.remove('hidden');
+    document.getElementById('bottomLoginBtn').classList.remove('hidden');
+    document.getElementById('bottomRegisterBtn').classList.remove('hidden');
+    document.getElementById('topLogoutBtn').classList.add('hidden');
+    welcome.classList.add('hidden'); welcome.onclick=null;
+    adminTopPanel?.classList?.add('hidden');
+    updateInstallVisibility(false);
+  }
+}
+async function doLogin(){ const {error}=await supabaseClient.auth.signInWithOAuth({provider:'google', options:{redirectTo: window.location.href}}); if(error) showModal(error.message); }
+document.getElementById('topLoginBtn').onclick = doLogin;
+document.getElementById('bottomLoginBtn').onclick = doLogin;
+document.getElementById('topRegisterBtn').onclick = async ()=>{ const {data:{user}} = await supabaseClient.auth.getUser(); if(!user){ await doLogin(); } else { openModal(); } };
+document.getElementById('bottomRegisterBtn').onclick = document.getElementById('topRegisterBtn').onclick;
+document.getElementById('topLogoutBtn').onclick = async ()=>{ await supabaseClient.auth.signOut(); location.reload(); };
+async function saveCustomer(){
+  const btn=document.getElementById('saveBtn'); const phone=document.getElementById('phone').value.trim(); const lineId=document.getElementById('lineId').value.trim(); const fbLink=document.getElementById('fbLink').value.trim(); const address=document.getElementById('address').value.trim();
+  if(!phone||!lineId||!address){ showModal('กรอกให้ครบก่อน!'); return; }
+  btn.innerText='กำลังบันทึก...'; btn.disabled=true;
+  const {data:{user}} = await supabaseClient.auth.getUser();
+  try{ const {error} = await supabaseClient.from('customers').upsert({email:user.email, display_name:user.user_metadata.full_name||user.email, phone, line_id:lineId, facebook_url:fbLink, address},{onConflict:'email'}); if(error) console.warn(error.message); }catch(e){ console.warn(e); }
+  showModal('บันทึกสำเร็จ!'); closeModal(); btn.innerText='บันทึกข้อมูล → พร้อมส่งของได้เลย!'; btn.disabled=false; history.replaceState(null, '', window.location.pathname); checkUser();
+}
+if(window.location.hash && window.location.hash.includes('access_token')) { setTimeout(() => { history.replaceState(null, '', window.location.pathname); }, 500); }
+
+// === FLOW QR NEAT: สแกนใน LINE -> บังคับเปิด Chrome แบบเนียน ===
+function saveQRSource(){
+  try{
+    if(urlParams.get('source')==='qr'){
+      sessionStorage.setItem('qr_source','1');
+      sessionStorage.setItem('qr_time', Date.now().toString());
+      // ลบ ?source=qr ออกจาก URL แบบเนียน ไม่ให้เด้งซ้ำ
+      if(!isInApp){ history.replaceState(null, '', window.location.pathname); }else{ const cleanUrl = window.location.pathname + (urlParams.get('from') ? '?from='+urlParams.get('from') : ''); history.replaceState(null, '', cleanUrl || '/index'); }
+    }
+  }catch(e){}
+}
+saveQRSource();
+const isFromQRSession = (()=>{ try{ return sessionStorage.getItem('qr_source')==='1'; }catch(e){ return false; } })();
+const effectiveIsFromQR = isFromQR || isFromQRSession;
+
+function forceOpenInChrome(){
+  const target = '/?from=line_qr_chrome';
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  try{ localStorage.setItem('qr_open_chrome','1'); }catch(e){}
+  hideOpenCardMatemModal();
+  if(isAndroid){
+    // ชั้น 1: Intent ตรงไป Chrome เลย - เนียนสุด
+    window.location.href = 'intent://www.cardmatem.store/#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(target)+';end';
+    // ชั้น 2: fallback เปิดแท็บใหม่ให้ LINE ถามเปิดเบราว์เซอร์
+    setTimeout(()=>{
+      try{ window.open(target, '_blank'); }catch(e){}
+      window.location.href = target;
+    }, 900);
+  }else{
+    // iOS ไม่มี intent -> เปิดแท็บใหม่
+    try{ window.open(target, '_blank'); }catch(e){}
+    setTimeout(()=>{ window.location.href = target; }, 300);
+  }
+}
+function backToLineScan(){
+  // FIX V5: ยกเลิกแล้วไม่ลิ้งค์ ไม่ back ไม่ close - แค่ซ่อน Modal ตามสั่ง
+  hideOpenCardMatemModal();
+  var b = document.getElementById('inAppBanner');
+  if(b){
+    b.className = 'block mb-4 bg-zinc-800 border border-white/10 text-zinc-400 text-[11px] p-3 rounded-xl text-center';
+    b.innerHTML = 'กด <b>ตกลง</b> เพื่อเปิดใน Chrome • กด ยกเลิก = อยู่หน้านี้ ไม่ลิ้งค์ไปไหน';
+    b.classList.remove('hidden');
+  }
+}
+function openCardMatemMain(){ forceOpenInChrome(); }
+function showOpenCardMatemModal(){
+  document.getElementById('openCardMatemModal')?.classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function hideOpenCardMatemModal(){
+  document.getElementById('openCardMatemModal')?.classList.add('hidden');
+  document.body.style.overflow='';
+}
+window.addEventListener('load', ()=>{
+  if(effectiveIsFromQR && isInApp && !isStandalone){
+    setTimeout(()=>{ showOpenCardMatemModal(); }, 600);
+    return;
+  }
+  if(effectiveIsFromQR && !isInApp && !isStandalone && !isAppInstalled){
+    const topBtn = document.getElementById('installTopBtn');
+    if(topBtn){ topBtn.classList.add('animate-pulse'); topBtn.innerHTML = '⭐ ติดตั้งเลย'; }
+    if(deferredPrompt){
+      setTimeout(()=>{ if(deferredPrompt) handleInstallClick(); }, 1200);
+    }
+  }
+});
+document.getElementById('confirmOpen')?.addEventListener('click', ()=>{
+  forceOpenInChrome();
+});
+document.getElementById('cancelOpen')?.addEventListener('click', ()=>{
+  // FIX: ยกเลิกไม่ลิ้งค์
+  hideOpenCardMatemModal();
+});
+ // กดพื้นที่ดำปิด = ยกเลิกแต่ไม่ลิ้งค์
+document.getElementById('openCardMatemModal')?.addEventListener('click', (e)=>{
+  if(e.target.id==='openCardMatemModal') hideOpenCardMatemModal();
+});
+let handleInstallClick = async function(){
+  if(isInApp){
+    // ใน LINE/FB ให้โชว์ Modal บังคับเปิด Chrome แทน ไม่วนลูป
+    if(effectiveIsFromQR){
+      showOpenCardMatemModal();
+    }else{
+      document.getElementById('iosText').innerHTML = 'คุณเปิดใน '+(isLine?'LINE':'Messenger')+' อยู่<br><br>1. กด <b>⋮</b> มุมขวาบน<br>2. เลือก <span class="bg-yellow-400 text-black px-2 py-0.5 rounded font-black">เปิดในเบราว์เซอร์</span><br>3. แล้วกด <span class="bg-yellow-400 text-black px-2 py-0.5 rounded">เพิ่มไว้หน้าแรก</span>';
+      document.getElementById('iosInstallModal').classList.remove('hidden');
+    }
+    return;
+  }
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    const {outcome} = await deferredPrompt.userChoice;
+    if(outcome === 'accepted'){ localStorage.setItem('pwa-installed','1'); isAppInstalled=true; }
+    deferredPrompt=null; updateInstallVisibility(); return;
+  }
+  if(isIOS){
+    document.getElementById('iosText').innerHTML = '1. กดปุ่ม <span class="bg-zinc-700 px-1 py-0.5 rounded">แชร์ ⬆️</span> ล่างจอ<br>2. เลือก <b>เพิ่มไปยังหน้าจอโฮม</b><br>3. กด <b>เพิ่ม</b>';
+    document.getElementById('iosInstallModal').classList.remove('hidden'); return;
+  }
+  if(isStandalone){ showModal('ติดตั้งแล้ว! เปิดจากไอคอนหน้าโฮมได้เลย'); }
+  else { document.getElementById('iosText').innerHTML = '1. กดเมนู <b>⋮</b> มุมขวาบน<br>2. เลือก <span class="bg-yellow-400 text-black px-2 py-0.5 rounded font-black">ติดตั้งแอป / เพิ่มไว้หน้าแรก</span><br>3. กด <b>ติดตั้ง / เพิ่ม</b>'; document.getElementById('iosInstallModal').classList.remove('hidden'); }
+};
+document.getElementById('installTopBtn')?.addEventListener('click', handleInstallClick);
+document.getElementById('installBottomBtn')?.addEventListener('click', handleInstallClick);
+
+checkUser();
+updateInstallVisibility();
+</script>
+
+
+<!-- POPUP QR -> Chrome เนียนๆ แบบ Native ติดตั้งแอป -->
+<div id="openCardMatemModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-6">
+  <div class="bg-white rounded-[20px] w-full max-w-[360px] p-0 overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.4)] animate-[fadeIn_0.25s_ease]">
+    <div class="p-6 pb-3">
+      <div class="text-[22px] font-normal text-black leading-tight">เปิด Card Matem ใช่หรือไม่</div>
+    </div>
+    <div class="px-6 py-3 flex items-center gap-3">
+      <div class="w-12 h-12 rounded-[12px] bg-black flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #000 0%, #1a1a2e 100%); border: 1px solid #facc15; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+        <span class="font-black text-[16px] text-yellow-400 tracking-wider">CM</span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[16px] font-medium text-black truncate">Card Matem | ดีที่สุด</div>
+        <div class="text-[13px] text-zinc-500 truncate">www.cardmatem.store</div>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 px-4 py-3 mt-2">
+      <button id="cancelOpen" class="text-[15px] text-[#1a73e8] font-normal px-5 py-2.5 rounded-full hover:bg-zinc-100 transition">ยกเลิก</button>
+      <button id="confirmOpen" class="text-[15px] text-[#1a73e8] font-bold px-5 py-2.5 rounded-full hover:bg-blue-50 transition">ตกลง</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(showModalConfirm(msg)) onOk&&onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+
+<script>
+// FIX trade-style shine that never disappears - restart on bfcache like trade does not need but we force
+(function(){
+  function restartShine(){
+    document.querySelectorAll('.shine-red-beam').forEach(el=>{
+      el.style.animation='none';
+      void el.offsetWidth;
+      el.style.animation='';
+    });
+  }
+  window.addEventListener('pageshow', function(e){ setTimeout(restartShine, 50); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(restartShine, 50); });
+  window.addEventListener('focus', function(){ setTimeout(restartShine, 50); });
+})();
+</script>
+
+
+<script>
+// LOCK TEXT PERMANENT - แก้ถาวร ไม่ให้ login เปลี่ยนข้อความ
+(function(){
+  const LOCKS = {
+    'pregrade': { title: 'ส่งการ์ด Pregrade ระบบ 4K', desc: 'ถ่ายชัด ระบบ QR เช็คประวัติได้' },
+    'raw-market': { title: 'Raw Market ตลาดการ์ด', desc: 'ซื้อขาย เชคง่าย ดูตำหนิ มีประวัติ ตลาดที่จริงใจ' }
+  };
+  function lockTexts(){
+    const preCard = document.querySelector('[data-card="pregrade"]');
+    if(preCard){
+      const t = preCard.querySelector('.text-red-400, .text-red-300');
+      const d = preCard.querySelector('.text-zinc-500, .text-zinc-400');
+      // Find by structure
+      const titleEl = preCard.querySelector('div > div.text-\[12\.5px\]');
+      const descEl = preCard.querySelector('div > div.text-\[10px\]');
+      if(titleEl && LOCKS['pregrade']){
+        // Keep badge but lock text
+        const badge = titleEl.querySelector('span');
+        const badgeHTML = badge ? badge.outerHTML : '<span class="text-[7px] bg-[#60a5fa] text-white px-1 py-0.5 rounded font-bold">4K</span>';
+        titleEl.innerHTML = LOCKS['pregrade'].title + ' ' + badgeHTML;
+      }
+      if(descEl && LOCKS['pregrade']){
+        descEl.textContent = LOCKS['pregrade'].desc;
+      }
+    }
+    const rawCard = document.querySelector('[data-card="raw-market"]');
+    if(rawCard){
+      const titleEl = rawCard.querySelector('div > div.text-\[12\.5px\]');
+      const descEl = rawCard.querySelector('div > div.text-\[10px\]');
+      if(titleEl){
+        const badge = titleEl.querySelector('span');
+        const badgeHTML = badge ? badge.outerHTML : '<span class="text-[7px] bg-emerald-400 text-black px-1.5 py-0.5 rounded font-black ml-1">NEW</span>';
+        titleEl.innerHTML = LOCKS['raw-market'].title + ' ' + badgeHTML;
+      }
+      if(descEl){
+        descEl.textContent = LOCKS['raw-market'].desc;
+      }
+    }
+  }
+  // Lock on load, on bfcache, on visibility change, and after common.js checkUser
+  window.addEventListener('DOMContentLoaded', ()=> setTimeout(lockTexts, 100));
+  window.addEventListener('pageshow', ()=> setTimeout(lockTexts, 150));
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(lockTexts, 150); });
+  window.addEventListener('focus', ()=> setTimeout(lockTexts, 150));
+  // Lock after login/logout
+  const origCheckUser = window.checkUser;
+  if(origCheckUser){
+    window.checkUser = async function(){ 
+      const r = await origCheckUser.apply(this, arguments);
+      setTimeout(lockTexts, 200);
+      return r;
+    };
+  } else {
+    // If checkUser not yet defined, poll
+    let tries=0;
+    const iv=setInterval(()=>{
+      if(window.checkUser || tries>20){ clearInterval(iv); setTimeout(lockTexts, 300); }
+      tries++;
+    }, 300);
+  }
+  // Also lock every 1 sec for 5 sec after load (กัน common.js แก้ทับ)
+  let cnt=0;
+  const iv2=setInterval(()=>{ lockTexts(); cnt++; if(cnt>5) clearInterval(iv2); }, 1000);
+})();
+</script>
+
+</body>
+</html>

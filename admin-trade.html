@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Trade - จัดการตลาด</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>body{font-family:'Kanit',sans-serif;background:#050507;color:#fff}</style>
+<script>
+// === CM D1/R2 FIX - UI เดิม 100% - แก้เฉพาะโค้ดดึงข้อมูล ===
+// FIXED V3 - using window.CM_R2_API
+const CM_R2_API = window.CM_R2_API || "https://r2-proxy.vasan-jitpim.workers.dev";
+const CM_D1_API = CM_R2_API + "/api";
+async function cmFetchD1(path, fallbackFn){
+  try{
+    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch(CM_D1_API + path, {cache:'no-store', signal: ctrl.signal});
+    if(r.ok){ const j = await r.json(); if(j) return j; }
+  }catch(e){}
+  if(typeof fallbackFn==='function'){ try{ return await fallbackFn(); }catch(e){} }
+  return [];
+}
+async function cmUploadR2(fileOrBlob, fileName, extra={}){
+  try{
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, fileName);
+    for(const k in extra) fd.append(k, extra[k]);
+    const r = await fetch(CM_R2_API, {method:'POST', body: fd});
+    const j = await r.json();
+    return j.url || j.image_url || null;
+  }catch(e){ return null; }
+}
+const CM_ADMIN_EMAIL = "vasan.jitpim@gmail.com";
+const CM_ADMIN_CM = "CM-0000";
+function cmIsAdmin(email, memberNo){
+  const e = (email||"").toLowerCase();
+  const cm = (memberNo||"").toString().toUpperCase();
+  return e===CM_ADMIN_EMAIL || cm===CM_ADMIN_CM || cm==="0" || cm==="CM-0000";
+}
+</script>
+
+</head>
+<body class="flex justify-center bg-black">
+<div class="w-full max-w-[440px] min-h-screen bg-[#0a0a0f] flex flex-col">
+<div class="px-5 py-4 flex justify-between items-center bg-[#12121a] border-b border-white/10"><h1 class="font-black text-[14px]">Admin Trade - จัดการตลาด Free 10 ใบ</h1><a href="/trade" class="text-[10px] bg-yellow-400 text-black font-bold px-3 py-1.5 rounded-full">ดูตลาด</a></div>
+<div class="p-3 grid grid-cols-3 gap-2">
+<div class="bg-[#16121f] border border-white/10 p-3 rounded-xl"><p class="text-[10px] text-zinc-400">Raw ทั้งหมด</p><p id="statRaw" class="text-xl font-black text-orange-400">0</p><p class="text-[8px] text-zinc-500">ฟรี 10 ใบ/คน 15+5=20 วันลบ</p></div>
+<div class="bg-[#16121f] border border-white/10 p-3 rounded-xl"><p class="text-[10px] text-zinc-400">QR โฉนด</p><p id="statQR" class="text-xl font-black text-green-400">0</p><p class="text-[8px] text-zinc-500">ไม่จำกัด ไม่ลบ</p></div>
+<div class="bg-[#16121f] border border-white/10 p-3 rounded-xl"><p class="text-[10px] text-zinc-400">หมดอายุรอ 5 วัน</p><p id="statExp" class="text-xl font-black text-red-400">0</p><p class="text-[8px] text-zinc-500">ครบ 20 วันลบ Auto</p></div>
+</div>
+<div class="px-3"><div class="bg-[#12121a] border border-white/10 rounded-xl p-3 flex flex-wrap gap-1.5"><button onclick="loadList('active_raw')" class="bg-orange-500 text-white px-3 py-1.5 rounded-full text-[10px] font-bold">Raw Active</button><button onclick="loadList('expired')" class="bg-yellow-500 text-black px-3 py-1.5 rounded-full text-[10px] font-bold">หมดอายุ 15 วัน</button><button onclick="loadList('to_delete')" class="bg-red-600 text-white px-3 py-1.5 rounded-full text-[10px] font-bold">ครบ 20 วันรอลบ</button><button onclick="cleanup20Days()" class="bg-zinc-800 border border-white/10 text-white px-3 py-1.5 rounded-full text-[10px]">ลบ Auto 20 วันทั้งหมด</button><button onclick="loadBanned()" class="bg-black border border-white/10 text-white px-3 py-1.5 rounded-full text-[10px]">คนโดนแบน</button></div>
+<div id="list" class="mt-3 grid gap-2 max-h-[50vh] overflow-y-auto"></div></div>
+<div class="p-3 mt-3"><div class="bg-[#12121a] border border-white/10 rounded-xl p-3"><h3 class="font-bold text-[12px] mb-2">แบน-ปลด สมาชิก (ใส่เหตุผลกันดราม่า)</h3><div class="flex gap-2"><input id="banNo" placeholder="CM-0005" class="flex-1 bg-black border border-white/10 p-2 rounded-xl text-[11px]"><input id="banReason" placeholder="เหตุผล: โกง หมกตำหนิ รูปปลอม" class="flex-[2] bg-black border border-white/10 p-2 rounded-xl text-[11px]"></div><div class="flex gap-2 mt-2"><button onclick="ban()" class="flex-1 bg-red-600 text-white py-2 rounded-xl text-[11px] font-bold">แบน</button><button onclick="unban()" class="flex-1 bg-green-600 text-white py-2 rounded-xl text-[11px] font-bold">ปลด</button></div></div></div>
+</div>
+<script>
+const SUPABASE_URL = localStorage.getItem('SUPABASE_URL') || 'https://your-project.supabase.co';
+const SUPABASE_KEY = localStorage.getItem('SUPABASE_KEY') || 'your-anon-key';
+let supa=null; try{ if(SUPABASE_URL.includes('supabase')) supa=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);}catch(e){}
+async function loadStats(){
+  if(!supa){ document.getElementById('statRaw').innerText='Demo'; document.getElementById('statQR').innerText='Demo'; document.getElementById('statExp').innerText='Demo'; return; }
+  const {count:raw}=await supa.from('market_listings').select('*',{count:'exact',head:true}).eq('has_qr',false).eq('status','active');
+  const {count:qr}=await supa.from('market_listings').select('*',{count:'exact',head:true}).eq('has_qr',true).eq('status','active');
+  const {count:exp}=await supa.from('market_listings').select('*',{count:'exact',head:true}).eq('status','expired');
+  document.getElementById('statRaw').innerText=raw||0; document.getElementById('statQR').innerText=qr||0; document.getElementById('statExp').innerText=exp||0;
+}
+async function loadList(type){
+  const el=document.getElementById('list'); el.innerHTML='<div class="text-center py-5 text-[11px] text-zinc-500">โหลด...</div>';
+  if(!supa){ el.innerHTML='<div class="text-center py-5 text-[11px] text-zinc-500">Demo: ต่อ Supabase จะโชว์รายการจริง</div>'; return; }
+  let q;
+  if(type==='active_raw') q=supa.from('market_listings').select('*').eq('has_qr',false).eq('status','active').order('expires_at',{ascending:true}).limit(20);
+  if(type==='expired') q=supa.from('market_listings').select('*').eq('status','expired').order('expires_at',{ascending:true}).limit(20);
+  if(type==='to_delete'){ const cutoff=new Date(); cutoff.setDate(cutoff.getDate()-5); q=supa.from('market_listings').select('*').eq('status','expired').lt('expires_at',cutoff.toISOString()).limit(20); }
+  const {data}=await q; if(!data||data.length===0){ el.innerHTML='<div class="text-center py-5 text-zinc-500 text-[11px]">ไม่มีข้อมูล</div>'; return; }
+  el.innerHTML=data.map(c=>{ const days=Math.ceil((new Date(c.expires_at)-new Date())/86400000); return `<div class="bg-[#16121f] border border-white/10 rounded-xl p-3 text-[11px]"><div class="flex justify-between"><b>${c.seller_member_no}</b><span class="${days<0?'text-red-400':''}">${days} วัน</span></div><p class="truncate text-zinc-400 mt-1">${c.title}</p><div class="flex gap-1 mt-2"><button onclick="renewAdmin('${c.id}')" class="bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 px-2 py-1 rounded-full text-[10px]">ต่อ 15 วัน</button><button onclick="delAdmin('${c.id}')" class="bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-1 rounded-full text-[10px]">ลบ + คืนโควต้า</button></div></div>`; }).join('');
+}
+async function cleanup20Days(){ 
+  if(!confirm('ลบ Raw ที่หมดอายุเกิน 20 วันทั้งหมด? (QR โฉนดไม่ลบ - ไม่จำกัด)')) return; 
+  const graceCutoff=new Date(); graceCutoff.setDate(graceCutoff.getDate()-5);
+  const {data, error} = await supa.from('market_listings').delete().eq('status','expired').eq('has_qr', false).lt('expires_at', graceCutoff.toISOString()).select();
+  if(error){ showModal('ลบไม่สำเร็จ: '+error.message); return; }
+  if(data && data.length){
+    for(const r of data){
+      await supa.from('market_cards').delete().eq('id', r.id);
+      await supa.from('market_cards').delete().eq('card_id', r.id);
+    }
+  }
+  showModal('ลบ Raw หมดอายุเกิน 20 วันแล้ว '+(data?data.length:0)+' ใบ | QR ไม่ลบ (ไม่จำกัด) | คืนโควต้า 10 ใบ/ID อัตโนมัติ'); 
+  loadStats(); 
+  loadList('to_delete');
+}
+async function renewAdmin(id){ const ne=new Date(); ne.setDate(ne.getDate()+15); await supa.from('market_listings').update({expires_at:ne.toISOString(),status:'active'}).eq('id',id); showModal('ต่อแล้ว'); loadStats(); }
+async function delAdmin(id){ if(!confirm('ลบ?')) return; await supa.from('market_listings').delete().eq('id',id); await supa.from('market_cards').delete().eq('id',id); await supa.from('market_listings').delete().eq('card_id',id); await supa.from('market_cards').delete().eq('card_id',id); showModal('ลบแล้ว + คืนโควต้า'); // FIXED loadStats(); }
+async function ban(){ 
+  const no=document.getElementById('banNo').value.trim(); 
+  const reason=document.getElementById('banReason').value.trim(); 
+  if(!no||!reason) return showModal('ใส่เลข + เหตุผล'); 
+  if(!confirm(`แบน ${no}? การ์ดจะถูกอายัด หายจากตลาดทันที + ห้ามโอน`)) return;
+  await supa.from('customers').update({is_banned:true,ban_reason:reason,banned_at:new Date().toISOString()}).eq('member_no',no);
+  // อายัด: ลบออกจากตลาด + อายัดการ์ด
+  const memberNum = no.replace('CM-','');
+  const {data: listings} = await supa.from('market_listings').select('id').or(`seller_member_no.eq.${no},seller_member_no.eq.${memberNum}`).eq('status','active');
+  if(listings && listings.length){
+    for(const l of listings){
+      await supa.from('market_listings').update({status:'banned_freeze', banned_at: new Date().toISOString(), ban_reason: reason}).eq('id', l.id);
+    }
+  }
+  // อายัดการ์ดทั้งหมดของคนนี้
+  await supa.from('cards').update({status:'banned', ban_reason: reason, banned_at: new Date().toISOString()}).eq('owner_member_no', memberNum);
+  showModal(`แบน ${no} แล้ว\n- อายัดการ์ด ${listings?listings.length:0} ใบจากตลาด\n- ห้ามโอน\n- ต้องปลดแบนถึงคืนตลาดได้`);
+  loadStats();
+  loadList('active_raw');
+}
+async function unban(){ 
+  const no=document.getElementById('banNo').value.trim(); 
+  if(!no) return showModal('ใส่เลข'); 
+  if(!confirm(`ปลดแบน ${no}? การ์ดที่ถูกอายัดจะกลับเข้าตลาด + คืนโควต้า 10 ใบ/ID`)) return;
+  await supa.from('customers').update({is_banned:false,ban_reason:null, banned_at: null}).eq('member_no',no);
+  const memberNum = no.replace('CM-','');
+  // คืนการ์ดที่ถูก freeze กลับ active
+  await supa.from('market_listings').update({status:'active', banned_at: null, ban_reason: null}).eq('status','banned_freeze').or(`seller_member_no.eq.${no},seller_member_no.eq.${memberNum}`);
+  await supa.from('cards').update({status:'Owned', ban_reason: null, banned_at: null}).eq('status','banned').eq('owner_member_no', memberNum);
+  showModal(`ปลดแบน ${no} แล้ว\n- คืนการ์ดเข้าตลาด\n- คืนโควต้า Raw 10 ใบ\n- โอนได้ปกติ`);
+  loadStats();
+}
+async function loadBanned(){ const el=document.getElementById('list'); const {data}=await supa.from('customers').select('member_no,display_name,ban_reason,banned_at').eq('is_banned',true).limit(20); el.innerHTML=data.map(m=>`<div class="bg-[#16121f] border border-white/10 rounded-xl p-3 text-[11px]"><b>${m.member_no}</b> ${m.display_name}<br><span class="text-zinc-500">เหตุผล: ${m.ban_reason}</span><br><button onclick="document.getElementById('banNo').value='${m.member_no}'; unban();" class="mt-2 bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-[10px]">ปลดแบน</button></div>`).join(''); }
+loadStats(); loadList('active_raw');
+</script></body></html>

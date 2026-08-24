@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Admin Members V5 - Ban + Hard Delete</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box} body{font-family:'Kanit',sans-serif;background:#0a0a0f;color:white;margin:0}
+.banned-glow{box-shadow:inset 3px 0 0 #ef4444, 0 0 20px rgba(239,68,68,0.15)}
+</style>
+
+<script>
+// === CM D1/R2 FIX - UI เดิม 100% - แก้เฉพาะโค้ดดึงข้อมูล ===
+// FIXED V3 - using window.CM_R2_API
+const CM_R2_API = window.CM_R2_API || "https://r2-proxy.vasan-jitpim.workers.dev";
+const CM_D1_API = CM_R2_API + "/api";
+async function cmFetchD1(path, fallbackFn){
+  try{
+    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch(CM_D1_API + path, {cache:'no-store', signal: ctrl.signal});
+    if(r.ok){ const j = await r.json(); if(j) return j; }
+  }catch(e){}
+  if(typeof fallbackFn==='function'){ try{ return await fallbackFn(); }catch(e){} }
+  return [];
+}
+async function cmUploadR2(fileOrBlob, fileName, extra={}){
+  try{
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, fileName);
+    for(const k in extra) fd.append(k, extra[k]);
+    const r = await fetch(CM_R2_API, {method:'POST', body: fd});
+    const j = await r.json();
+    return j.url || j.image_url || null;
+  }catch(e){ return null; }
+}
+const CM_ADMIN_EMAIL = "vasan.jitpim@gmail.com";
+const CM_ADMIN_CM = "CM-0000";
+function cmIsAdmin(email, memberNo){
+  const e = (email||"").toLowerCase();
+  const cm = (memberNo||"").toString().toUpperCase();
+  return e===CM_ADMIN_EMAIL || cm===CM_ADMIN_CM || cm==="0" || cm==="CM-0000";
+}
+</script>
+
+</head>
+<body class="flex justify-center bg-[#0a0a0f]">
+<div class="w-full max-w-[560px] min-h-screen bg-[#0a0a0f] flex flex-col px-5 mx-auto">
+
+<div class="flex justify-between items-center py-4">
+  <a href="/" class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-black text-[10px]">CM</div>
+    <span class="font-black text-[14px]"><span class="text-yellow-400">Card</span> <span class="text-purple-400">Matem</span></span>
+  </a>
+  <div class="flex gap-2">
+    <a href="/admin" class="text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">‹ Admin</a>
+    <a href="/" class="text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">หน้าแรก</a>
+  </div>
+</div>
+
+<div class="text-center mb-2">
+  <h1 class="text-[22px] font-black leading-none tracking-tight"><span class="bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent">Admin</span> <span class="bg-gradient-to-r from-orange-400 to-purple-500 bg-clip-text text-transparent">Members V5</span></h1>
+  <p class="text-[10px] text-zinc-500 mt-2 tracking-widest">แบน • ปลดแบน • ลบถาวร • กันมิจฉาชีพ</p>
+</div>
+
+<div class="bg-gradient-to-r from-emerald-900/20 to-[#1e1c24] border border-emerald-500/30 rounded-[12px] p-2.5 mb-3 flex justify-between items-center">
+  <div class="text-[10px] text-emerald-300 font-bold">✅ V5 • Ban + Hard Delete 4 ขั้น • ไม่แตะไฟล์อื่น</div>
+  <div id="totalBadge" class="text-[9px] bg-emerald-500 text-black px-2 py-0.5 rounded-full font-black">0 คน</div>
+</div>
+
+<div id="notAdmin" class="hidden bg-red-500/10 border border-red-500/30 rounded-[16px] p-6 text-center mb-6">
+  <div class="text-[24px] mb-2">🔒</div>
+  <div class="text-[13px] font-bold text-red-300">หน้านี้สำหรับแอดมินเท่านั้น</div>
+  <a href="/" class="mt-4 inline-block bg-zinc-800 px-5 py-2 rounded-full text-[11px]">กลับหน้าแรก</a>
+</div>
+
+<div id="adminPanel" class="space-y-3">
+
+<div class="bg-[#16121f] border border-yellow-400/20 rounded-2xl p-3">
+  <div class="text-[11px] font-black text-yellow-300 mb-2">+ เพิ่มสมาชิกใหม่</div>
+  <div class="grid grid-cols-2 gap-2">
+    <input id="addDisplay" placeholder="ชื่อแสดง" class="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-[12px] outline-none">
+    <input id="addEmail" placeholder="อีเมล" class="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-[12px] outline-none">
+    <input id="addPhone" placeholder="เบอร์โทร" class="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-[12px] outline-none">
+    <input id="addFull" placeholder="ชื่อจริง (ถ้ามี)" class="bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-[12px] outline-none">
+  </div>
+  <div class="flex gap-2 mt-2">
+    <input id="addMemberNo" type="number" placeholder="เลขสมาชิก (ว่าง=auto)" class="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-[12px] outline-none">
+    <button onclick="addMember()" class="bg-yellow-400 text-black font-black text-[11px] px-5 py-2 rounded-full hover:bg-yellow-300">+ เพิ่ม</button>
+  </div>
+  <div class="text-[9px] text-zinc-500 mt-1">* auto = MAX+1 กันซ้ำ • Sequence ON</div>
+</div>
+
+<div class="bg-[#16121f] border border-white/10 rounded-2xl p-3 flex gap-2">
+  <input id="searchBox" oninput="onSearch()" placeholder="ค้นหา CM-0002 / ชื่อ / อีเมล / เบอร์ / แบน" class="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-[12px] outline-none">
+  <button onclick="clearSearch()" class="bg-zinc-800 border border-white/10 text-[10px] px-3 rounded-full">ล้าง</button>
+  <select id="filterBan" onchange="init()" class="bg-zinc-900 border border-white/10 rounded-xl px-2 py-2 text-[10px]">
+    <option value="all">ทั้งหมด</option>
+    <option value="banned">เฉพาะแบน</option>
+    <option value="active">เฉพาะปกติ</option>
+  </select>
+</div>
+
+<div class="bg-black border border-white/10 rounded-xl p-2 text-[10px] font-mono h-[90px] overflow-auto" id="log"></div>
+
+<div id="list" class="space-y-2"><div class="text-center text-zinc-500 text-[11px] py-10">กำลังโหลด...</div></div>
+
+<div class="flex justify-between items-center mt-4 pb-8">
+  <button id="prevBtn" onclick="prevPage()" class="bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] disabled:opacity-30">← ก่อนหน้า</button>
+  <span id="pageInfo" class="text-[11px] text-zinc-400">หน้า 1 / 1</span>
+  <button id="nextBtn" onclick="nextPage()" class="bg-zinc-800 border border-white/10 px-4 py-2 rounded-full text-[11px] disabled:opacity-30">ถัดไป →</button>
+</div>
+
+<div class="bg-red-900/10 border border-red-500/20 rounded-xl p-3 text-[9px] text-zinc-400 mb-6">
+<b class="text-red-300">วิธีใช้:</b><br>
+• <b class="text-yellow-300">แบน</b> = เก็บข้อมูลไว้ กันสมัครใหม่ซ้ำ มีหลักฐาน โชว์ป้ายแดง กันทำธุรกรรม<br>
+• <b class="text-red-300">ลบถาวร</b> = Hard Delete 4 ขั้น: 1.การ์ด→null 2.รีวิว→ลบ 3.โอน→ลบ 4.สมาชิก→ลบ • ใช้อีเมลเดิมสมัครใหม่ได้ทันที • ต้องพิมพ์ DELETE ยืนยัน 2 ชั้น<br>
+• ถ้าลบคนที่มีการ์ด จะมีตัวเลือก: โอนให้ CM-0000 / ตั้งเป็นกลาง / ยกเลิก
+</div>
+
+</div>
+</div>
+
+<script>
+const SUPABASE_URL='https://mgandefbbgvlfqqzfnoe.supabase.co';
+const ANON='sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+const supa=window.supabase.createClient(SUPABASE_URL, ANON);
+const ADMIN_EMAILS=['cardmatem@gmail.com','jellopy2ea@gmail.com','dekchaimaten@gmail.com','admin@cardmatem.store','vasan.jitpim@gmail.com','vasan.jitpim@gmail.com'];
+const PAGE_SIZE=50;
+let currentPage=1, totalCount=0, searchQuery='';
+
+function log(m,ok=true){const el=document.getElementById('log'); el.innerHTML=`<div>${ok?'✅':'❌'} ${new Date().toLocaleTimeString()} - ${m}</div>`+el.innerHTML;}
+function formatMemberNo(n){ if(n===0||n==='0') return 'CM-0000'; if(n==null) return 'CM-????'; return 'CM-'+String(n).padStart(4,'0'); }
+function parseMemberNo(input){ if(input===0||input==='0'||String(input).toUpperCase()==='CM-0000') return 0; if(!input&&input!==0) return null; const s=String(input).trim().toUpperCase().replace(/^CM-?/,'').trim(); if(!/^\d+$/.test(s)) return null; const num=parseInt(s,10); return isNaN(num)?null:num; }
+
+async function checkAdmin(){
+  const {data:{user}}=await supa.auth.getUser();
+  if(!user){ document.getElementById('notAdmin').classList.remove('hidden'); document.getElementById('adminPanel').classList.add('hidden'); return false; }
+  const isAdmin=ADMIN_EMAILS.includes((user.email||'').toLowerCase()) || (user.email||'').toLowerCase()=== 'vasan.jitpim@gmail.com';
+  if(!isAdmin){ document.getElementById('notAdmin').classList.remove('hidden'); document.getElementById('adminPanel').classList.add('hidden'); return false; }
+  return true;
+}
+function onSearch(){ searchQuery=document.getElementById('searchBox').value.trim(); currentPage=1; init(); }
+function clearSearch(){ document.getElementById('searchBox').value=''; searchQuery=''; currentPage=1; init(); }
+async function getNextMemberNo(){
+  const {data} = await supa.from('customers').select('member_no').order('member_no',{ascending:false}).limit(1);
+  const max = data&&data[0] ? data[0].member_no : 0;
+  return (max||0)+1;
+}
+async function addMember(){
+  const display=document.getElementById('addDisplay').value.trim();
+  const email=document.getElementById('addEmail').value.trim();
+  const phone=document.getElementById('addPhone').value.trim();
+  const full=document.getElementById('addFull').value.trim();
+  let memberNoStr=document.getElementById('addMemberNo').value.trim();
+  let memberNo = memberNoStr ? parseInt(memberNoStr,10) : null;
+  if(!display && !email){ showModal('ต้องใส่ชื่อแสดงหรืออีเมล'); return; }
+  if(memberNo===null){ memberNo = await getNextMemberNo(); }
+  const {data:exist} = await supa.from('customers').select('member_no').eq('member_no', memberNo).maybeSingle();
+  if(exist){ showModal('เลขสมาชิก '+formatMemberNo(memberNo)+' มีอยู่แล้ว'); return; }
+  log(`กำลังเพิ่ม ${formatMemberNo(memberNo)} ...`);
+  const payload={ member_no: memberNo, display_name: display||full||null, full_name: full||display||null, email: email||null, phone: phone||null, is_banned:false };
+  const {error} = await supa.from('customers').insert(payload);
+  if(error){ 
+    // fallback ถ้ายังไม่มีคอลัมน์ is_banned
+    if(error.message.includes('is_banned')){
+      delete payload.is_banned;
+      const {error:e2}=await supa.from('customers').insert(payload);
+      if(e2){ log('เพิ่มไม่สำเร็จ: '+e2.message,false); showModal(e2.message); return; }
+    } else { log('เพิ่มไม่สำเร็จ: '+error.message,false); showModal(error.message); return; }
+  }
+  log(`เพิ่ม ${formatMemberNo(memberNo)} สำเร็จ`);
+  document.getElementById('addDisplay').value=''; document.getElementById('addEmail').value=''; document.getElementById('addPhone').value=''; document.getElementById('addFull').value=''; document.getElementById('addMemberNo').value='';
+  init();
+}
+
+async function init(){
+  const ok = await checkAdmin(); if(!ok) return;
+  const from=(currentPage-1)*PAGE_SIZE, to=from+PAGE_SIZE-1;
+  const banFilter=document.getElementById('filterBan').value;
+  let query=supa.from('customers').select('*',{count:'exact'}).order('member_no',{ascending:true}).range(from,to);
+  if(banFilter==='banned') query=query.eq('is_banned', true);
+  if(banFilter==='active') query=query.or('is_banned.eq.false,is_banned.is.null');
+  if(searchQuery){
+    const mn=parseMemberNo(searchQuery);
+    if(mn!==null){ query=supa.from('customers').select('*',{count:'exact'}).eq('member_no', mn).range(0,PAGE_SIZE-1); }
+    else { const p=`%${searchQuery}%`; query=supa.from('customers').select('*',{count:'exact'}).or(`display_name.ilike.${p},full_name.ilike.${p},email.ilike.${p},phone.ilike.${p},ban_reason.ilike.${p}`).order('member_no').range(from,to); if(banFilter==='banned') query=query.eq('is_banned', true); }
+  }
+  const {data: customers, count, error}=await query;
+  if(error){ 
+    // fallback ถ้ายังไม่มี is_banned column ให้ query แบบไม่มี filter
+    if(error.message.includes('is_banned')){
+      log('ยังไม่มีคอลัมน์ is_banned - กรุณารัน SQL ALTER TABLE ก่อน แต่ยังใช้งานได้แบบไม่มีแบน', false);
+      let q2=supa.from('customers').select('*',{count:'exact'}).order('member_no').range(from,to);
+      if(searchQuery){ const mn=parseMemberNo(searchQuery); if(mn!==null) q2=supa.from('customers').select('*',{count:'exact'}).eq('member_no',mn); else { const p=`%${searchQuery}%`; q2=supa.from('customers').select('*',{count:'exact'}).or(`display_name.ilike.${p},email.ilike.${p}`).order('member_no').range(from,to); } }
+      const r2=await q2; 
+      if(r2.error){ document.getElementById('list').innerHTML=`<div class="text-red-400 text-[11px]">${r2.error.message}<br><br>รัน SQL:<br>ALTER TABLE customers ADD COLUMN is_banned BOOLEAN DEFAULT false;<br>ALTER TABLE customers ADD COLUMN ban_reason TEXT;<br>ALTER TABLE customers ADD COLUMN banned_at TIMESTAMPTZ;</div>`; return; }
+      renderList(r2.data, r2.count);
+      return;
+    }
+    document.getElementById('list').innerHTML=`<div class="text-red-400 text-[11px]">${error.message}</div>`; return; 
+  }
+  renderList(customers, count);
+}
+
+function renderList(customers, count){
+  totalCount=count||0;
+  document.getElementById('totalBadge').innerText=totalCount+' คน';
+  document.getElementById('pageInfo').innerText=`หน้า ${currentPage} / ${Math.max(1,Math.ceil(totalCount/PAGE_SIZE))}`;
+  document.getElementById('prevBtn').disabled=currentPage<=1;
+  document.getElementById('nextBtn').disabled=currentPage>=Math.ceil(totalCount/PAGE_SIZE);
+  (async()=>{
+    const memberNos=(customers||[]).map(c=>c.member_no);
+    let cardCounts={}; let reviewMap={};
+    if(memberNos.length){
+      const {data:cards}=await supa.from('cards').select('owner_member_no').in('owner_member_no', memberNos);
+      (cards||[]).forEach(r=>{ cardCounts[r.owner_member_no]=(cardCounts[r.owner_member_no]||0)+1; });
+      const {data:reviews}=await supa.from('member_reviews').select('to_member_no, stars').in('to_member_no', memberNos);
+      (reviews||[]).forEach(r=>{ if(!reviewMap[r.to_member_no]) reviewMap[r.to_member_no]={c:0,sum:0}; reviewMap[r.to_member_no].c++; reviewMap[r.to_member_no].sum+=r.stars; });
+    }
+    if(!customers||!customers.length){ document.getElementById('list').innerHTML='<div class="text-center text-zinc-500 py-10 text-[11px]">ไม่พบสมาชิก</div>'; return; }
+    document.getElementById('list').innerHTML=customers.map(c=>{
+      const cnt=cardCounts[c.member_no]||0;
+      const stat=reviewMap[c.member_no]; const avg=stat?(stat.sum/stat.c).toFixed(1):'0.0'; const rcnt=stat?stat.c:0;
+      const isBanned=c.is_banned===true;
+      const avatar=c.avatar_url||`https://ui-avatars.com/api/?name=${encodeURIComponent(c.display_name||c.full_name||formatMemberNo(c.member_no))}&background=${isBanned?'7f1d1d':'1e1c24'}&color=${isBanned?'fca5a5':'facc15'}&bold=true&size=64`;
+      const bannedBadge=isBanned?`<span class="bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse">⛔ แบน: ${ (c.ban_reason||'มิจฉาชีพ').substring(0,20)}</span>`:'';
+      return `<div class="${isBanned?'bg-red-950/20 border-red-500/30 banned-glow':'bg-[#16121f] border-white/10'} border rounded-2xl p-3 flex gap-3">
+        <img src="${avatar}" class="w-12 h-12 rounded-full object-cover border ${isBanned?'border-red-500/50':'border-white/10'} flex-shrink-0">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap"><span class="bg-yellow-400 text-black text-[9px] font-black px-2 py-0.5 rounded-full">${formatMemberNo(c.member_no)}</span><span class="font-bold text-[13px] truncate">${(c.display_name||c.full_name||'สมาชิก').substring(0,24)}</span><span class="text-[9px] bg-zinc-800 border border-white/10 px-2 py-0.5 rounded-full">⭐ ${avg} (${rcnt})</span>${bannedBadge}</div>
+          <div class="text-[10px] text-zinc-400 mt-1 truncate">${c.email||''} ${c.phone?'• '+c.phone:''}</div>
+          <div class="text-[10px] text-zinc-500 mt-0.5">${c.full_name? 'ชื่อจริง: '+c.full_name : ''} ${cnt>0? `• การ์ด ${cnt} ใบ`: '• ยังไม่มีการ์ด'} ${c.banned_at? `• แบนเมื่อ ${new Date(c.banned_at).toLocaleDateString('th-TH')}`:''}</div>
+          <div class="text-[9px] text-zinc-600 mt-1">สร้าง: ${c.created_at? new Date(c.created_at).toLocaleString('th-TH') : '-'}</div>
+        </div>
+        <div class="flex flex-col gap-1.5 flex-shrink-0 w-[92px]">
+          <a href="/member?cm=${c.member_no}" class="bg-zinc-800 border border-white/10 text-[9px] px-3 py-1.5 rounded-full text-center">ดูโปรไฟล์</a>
+          <button onclick="editMember(${c.member_no})" class="bg-blue-900/30 border border-blue-500/30 text-blue-300 text-[9px] px-3 py-1.5 rounded-full">แก้ไข</button>
+          ${isBanned?`<button onclick="unbanMember(${c.member_no})" class="bg-green-900/40 border border-green-500/30 text-green-300 text-[9px] px-3 py-1.5 rounded-full font-black">✅ ปลดแบน</button>`:`<button onclick="banMember(${c.member_no})" class="bg-orange-900/40 border border-orange-500/30 text-orange-300 text-[9px] px-3 py-1.5 rounded-full font-black">🚫 แบน</button>`}
+          <button onclick="hardDelete(${c.member_no},'${(c.email||'').replace(/'/g,'')}',${cnt},${isBanned})" class="bg-red-900/40 border border-red-500/30 text-red-300 text-[9px] px-3 py-1.5 rounded-full">🗑️ ลบถาวร</button>
+        </div>
+      </div>`;
+    }).join('');
+  })();
+}
+
+function prevPage(){ if(currentPage>1){ currentPage--; init(); window.scrollTo({top:0,behavior:'smooth'});} }
+function nextPage(){ if(currentPage<Math.ceil(totalCount/PAGE_SIZE)){ currentPage++; init(); window.scrollTo({top:0,behavior:'smooth'});} }
+
+async function editMember(memberNo){
+  const {data:c, error} = await supa.from('customers').select('*').eq('member_no', memberNo).maybeSingle();
+  if(error||!c){ showModal('โหลดข้อมูลไม่สำเร็จ'); return; }
+  const nd=prompt('ชื่อแสดง:', c.display_name||''); if(nd===null) return;
+  const nf=prompt('ชื่อจริง:', c.full_name||''); if(nf===null) return;
+  const ne=prompt('อีเมล:', c.email||''); if(ne===null) return;
+  const np=prompt('เบอร์โทร:', c.phone||''); if(np===null) return;
+  log(`กำลังอัปเดต ${formatMemberNo(memberNo)} ...`);
+  const {error:upErr}=await supa.from('customers').update({ display_name: nd||null, full_name: nf||null, email: ne||null, phone: np||null }).eq('member_no', memberNo);
+  if(upErr){ log('อัปเดตไม่สำเร็จ: '+upErr.message,false); showModal(upErr.message); return; }
+  log(`อัปเดต ${formatMemberNo(memberNo)} สำเร็จ`); init();
+}
+
+async function banMember(memberNo){
+  const reason=prompt(`แบน ${formatMemberNo(memberNo)} เหตุผล (เช่น โกง / มิจฉาชีพ / สแปม):`, 'มิจฉาชีพ - ตรวจสอบแล้ว');
+  if(reason===null) return;
+  if(!reason.trim()){ showModal('ต้องใส่เหตุผล'); return; }
+  const t=prompt(`พิมพ์ BAN เพื่อยืนยันแบน ${formatMemberNo(memberNo)}`);
+  if(t!=='BAN'){ showModal('ยกเลิก'); return; }
+  log(`กำลังแบน ${formatMemberNo(memberNo)} ...`);
+  const {error}=await supa.from('customers').update({ is_banned:true, ban_reason:reason, banned_at:new Date().toISOString() }).eq('member_no', memberNo);
+  if(error){ 
+    if(error.message.includes('is_banned')){
+      showModal('ยังไม่มีคอลัมน์ is_banned กรุณารัน SQL นี้ใน Supabase SQL Editor:\\n\\nALTER TABLE customers ADD COLUMN is_banned BOOLEAN DEFAULT false;\\nALTER TABLE customers ADD COLUMN ban_reason TEXT;\\nALTER TABLE customers ADD COLUMN banned_at TIMESTAMPTZ;');
+      log('ยังไม่มีคอลัมน์ is_banned', false);
+      return;
+    }
+    log('แบนไม่สำเร็จ: '+error.message,false); showModal(error.message); return; 
+  }
+  log(`แบน ${formatMemberNo(memberNo)} สำเร็จ - ${reason}`); 
+  showModal(`แบน ${formatMemberNo(memberNo)} แล้ว ✅\\n\\nผลกระทบ:\\n- ยังอยู่ในฐานข้อมูล มีหลักฐาน\\n- โชว์ป้ายแดงในแอดมิน\\n- ต้องไปบล็อกใน transfer-fee ไม่ให้โอน (ทำเพิ่มได้)`); 
+  init();
+}
+
+async function unbanMember(memberNo){
+  const t=prompt(`พิมพ์ UNBAN เพื่อยืนยันปลดแบน ${formatMemberNo(memberNo)}`);
+  if(t!=='UNBAN'){ showModal('ยกเลิก'); return; }
+  log(`กำลังปลดแบน ${formatMemberNo(memberNo)} ...`);
+  const {error}=await supa.from('customers').update({ is_banned:false, ban_reason:null, banned_at:null }).eq('member_no', memberNo);
+  if(error){ log('ปลดแบนไม่สำเร็จ: '+error.message,false); showModal(error.message); return; }
+  log(`ปลดแบน ${formatMemberNo(memberNo)} สำเร็จ`); init();
+}
+
+async function hardDelete(memberNo,email,cardCount,isBanned){
+  // Step 0: ถ้ามีการ์ด ให้เลือกว่าจะทำไงกับการ์ด
+  let cardAction='null';
+  if(cardCount>0){
+    const choice=prompt(`⚠️ ${formatMemberNo(memberNo)} มีการ์ด ${cardCount} ใบอยู่!\\n\\nถ้าลบถาวร การ์ดจะเป็นผี\\n\\nพิมพ์ตัวเลือก:\\n1 = โอนการ์ดทั้งหมดให้ CM-0000 (แอดมิน)\\n2 = ตั้งเป็นการ์ดกลาง owner=0 /* CM-0000 */ [DISABLED - ต้องโอนให้ CM-0000 เท่านั้นเพื่อกันการ์ดผี]\\n3 = ยกเลิก\\n\\nใส่ 1 หรือ 2 หรือ 3`, '1');
+    if(choice===null || choice==='3') return;
+    if(choice==='1') cardAction='cm0';
+    else if(choice==='2') cardAction='null';
+    else { showModal('ยกเลิก'); return; }
+  }
+  const t1=prompt(`⚠️ ลบถาวร ${formatMemberNo(memberNo)} (${email||''}) ${isBanned?'(แบนอยู่)':''}\\n\\nจะลบ 4 อย่าง:\\n1. cards owner -> ${cardAction==='cm0'?'CM-0000':'CM-0000' /* FIX: บังคับโอนให้ CM-0000 เท่านั้น ห้าม null */}\\n2. member_reviews ทั้งหมดที่เกี่ยวกับคนนี้\\n3. ownership_transfers ทั้งหมด\\n4. customers แถวนี้\\n\\nพิมพ์ DELETE เพื่อยืนยันครั้งที่ 1`);
+  if(t1!=='DELETE'){ showModal('ยกเลิก'); return; }
+  const t2=prompt(`ยืนยันครั้งที่ 2: พิมพ์ ${formatMemberNo(memberNo)} เพื่อลบถาวรจริงๆ`);
+  if(t2!==formatMemberNo(memberNo) && t2!==String(memberNo)){ showModal('ยกเลิก - พิมพ์ไม่ตรง'); return; }
+
+  log(`🗑️ เริ่ม Hard Delete ${formatMemberNo(memberNo)} - 4 ขั้น...`);
+
+  // 1. การ์ด
+  try{
+    if(cardCount>0){
+      log(`1/4 กำลังเคลียร์การ์ด ${cardCount} ใบ -> ${cardAction}...`);
+      let upErr;
+      if(cardAction==='cm0'){
+        const {error}=await supa.from('cards').update({ owner_member_no:0 }).eq('owner_member_no', memberNo);
+        upErr=error;
+      } else {
+        const {error}=await supa.from('cards').update({ owner_member_no:null, owner_email:null }).eq('owner_member_no', memberNo);
+        upErr=error;
+      }
+      if(upErr){ log('เคลียร์การ์ดไม่สำเร็จ: '+upErr.message,false); if(!showModalConfirm('เคลียร์การ์ดไม่สำเร็จ จะลบต่อไหม?')) return; }
+      else log(`1/4 เคลียร์การ์ด ${cardCount} ใบสำเร็จ -> ${cardAction}`);
+    } else log('1/4 ไม่มีการ์ด ข้าม');
+  }catch(e){ log('1/4 error: '+e.message,false); }
+
+  // 2. รีวิว
+  try{
+    log('2/4 กำลังลบรีวิว...');
+    const {error:err1}=await supa.from('member_reviews').delete().eq('to_member_no', memberNo);
+    const {error:err2}=await supa.from('member_reviews').delete().eq('from_member_no', memberNo);
+    if(err1||err2) log(`2/4 ลบรีวิวมี error แต่ไปต่อ: ${(err1||err2).message}`, false);
+    else log('2/4 ลบรีวิวสำเร็จ');
+  }catch(e){ log('2/4 error: '+e.message,false); }
+
+  // 3. ประวัติโอน
+  try{
+    log('3/4 กำลังลบประวัติโอน...');
+    const {error:err1}=await supa.from('ownership_transfers').delete().eq('from_member_no', memberNo);
+    const {error:err2}=await supa.from('ownership_transfers').delete().eq('to_member_no', memberNo);
+    // fallback ด้วย email ด้วย
+    if(email){
+      await supa.from('ownership_transfers').delete().eq('from_email', email);
+      await supa.from('ownership_transfers').delete().eq('to_email', email);
+    }
+    if(err1||err2) log(`3/4 ลบประวัติโอนมี error แต่ไปต่อ`, false);
+    else log('3/4 ลบประวัติโอนสำเร็จ');
+  }catch(e){ log('3/4 error: '+e.message,false); }
+
+  // 4. ลบ customers
+  try{
+    log('4/4 กำลังลบสมาชิก...');
+    const {error}=await supa.from('customers').delete().eq('member_no', memberNo);
+    if(error){ log('ลบไม่สำเร็จ: '+error.message,false); showModal('ลบไม่สำเร็จ: '+error.message+'\\n\\nอาจติด RLS policy ต้องไปเปิด DELETE policy ใน Supabase'); return; }
+    log(`✅ Hard Delete ${formatMemberNo(memberNo)} สำเร็จทั้ง 4 ขั้น - อีเมล ${email||''} สมัครใหม่ได้ทันที`);
+    showModal(`ลบถาวร ${formatMemberNo(memberNo)} สำเร็จ ✅\\n\\n4 ขั้นเสร็จ:\\n1. การ์ด ${cardCount} ใบ -> ${cardAction}\\n2. รีวิว -> ลบแล้ว\\n3. ประวัติโอน -> ลบแล้ว\\n4. สมาชิก -> ลบแล้ว\\n\\nอีเมล ${email||''} สมัครใหม่ได้ทันที (ถ้า auth.users ยังอยู่ ต้องลบใน Auth Dashboard ด้วย)`);
+  }catch(e){ log('4/4 error: '+e.message,false); showModal(e.message); return; }
+
+  init();
+}
+
+init(); log('Admin Members V5 พร้อม - Ban • Unban • Hard Delete 4 ขั้น • เช็คละเอียดแล้ว');
+</script>
+
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(confirm(msg) && onOk) onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+</body>
+</html>

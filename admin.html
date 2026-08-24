@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Admin Panel - Card Matem</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box} body{font-family:'Kanit',sans-serif;background:#0a0a0f;color:white;margin:0;padding:0;overflow-x:hidden}
+.gold-gradient{background:linear-gradient(90deg,#facc15 0%,#a855f7 100%)}
+.card-glow-yellow{box-shadow:inset 3px 0 0 #facc15, 0 0 20px rgba(250,204,21,0.1)}
+.card-glow-orange{box-shadow:inset 3px 0 0 #fb923c, 0 0 20px rgba(251,146,60,0.1)}
+.card-glow-green{box-shadow:inset 3px 0 0 #34d399, 0 0 20px rgba(52,211,153,0.1)}
+.card-glow-blue{box-shadow:inset 3px 0 0 #60a5fa, 0 0 20px rgba(96,165,250,0.1)}
+.card-glow-red{box-shadow:inset 3px 0 0 #ef4444, 0 0 20px rgba(239,68,68,0.1)}
+.card-glow-purple{box-shadow:inset 3px 0 0 #a855f7, 0 0 20px rgba(168,85,247,0.15)}
+</style>
+
+<script>
+// === CM D1/R2 FIX - UI เดิม 100% - แก้เฉพาะโค้ดดึงข้อมูล ===
+// FIXED V3 - using window.CM_R2_API
+const CM_R2_API = window.CM_R2_API || "https://r2-proxy.vasan-jitpim.workers.dev";
+const CM_D1_API = CM_R2_API + "/api";
+async function cmFetchD1(path, fallbackFn){
+  try{
+    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 3000);
+    const r = await fetch(CM_D1_API + path, {cache:'no-store', signal: ctrl.signal});
+    if(r.ok){ const j = await r.json(); if(j) return j; }
+  }catch(e){}
+  if(typeof fallbackFn==='function'){ try{ return await fallbackFn(); }catch(e){} }
+  return [];
+}
+async function cmUploadR2(fileOrBlob, fileName, extra={}){
+  try{
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, fileName);
+    for(const k in extra) fd.append(k, extra[k]);
+    const r = await fetch(CM_R2_API, {method:'POST', body: fd});
+    const j = await r.json();
+    return j.url || j.image_url || null;
+  }catch(e){ return null; }
+}
+const CM_ADMIN_EMAIL = "vasan.jitpim@gmail.com";
+const CM_ADMIN_CM = "CM-0000";
+function cmIsAdmin(email, memberNo){
+  const e = (email||"").toLowerCase();
+  const cm = (memberNo||"").toString().toUpperCase();
+  return e===CM_ADMIN_EMAIL || cm===CM_ADMIN_CM || cm==="0" || cm==="CM-0000";
+}
+</script>
+
+</head>
+<body class="flex justify-center bg-[#0a0a0f]">
+<div class="w-full max-w-[420px] min-h-screen bg-[#0a0a0f] flex flex-col px-5 mx-auto box-border w-full">
+
+<div class="flex justify-between items-center py-4">
+  <a href="https://www.cardmatem.store/" class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-black text-[10px]">CM</div>
+    <span class="font-black text-[14px]"><span class="text-yellow-400">Card</span> <span class="text-purple-400">Matem</span></span>
+  </a>
+  <div class="flex gap-1.5 items-center"><a href="/qr-entrance" class="text-[9px] px-2.5 py-1 rounded-full bg-yellow-400 text-black font-black border border-yellow-400 leading-none">QR เข้าเว็บ</a><a href="/admin-backup" class="text-[9px] px-2.5 py-1 rounded-full bg-zinc-800 border border-white/10 text-zinc-300 hover:bg-zinc-700 transition leading-none flex items-center gap-1">🛡️ Backup</a><a href="/" id="backHomeBtn" class="text-[9px] px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 transition leading-none">‹ หน้าแรก</a></div>
+</div>
+
+<div class="text-center mb-2">
+  <h1 class="text-[32px] font-black leading-none tracking-tight"><span class="bg-gradient-to-r from-yellow-300 to-orange-400 bg-clip-text text-transparent">Card</span> <span class="bg-gradient-to-r from-orange-400 to-purple-500 bg-clip-text text-transparent">Matem</span></h1>
+  <p class="text-[10px] text-zinc-500 mt-2 tracking-widest">แกลเลอรีการ์ดแท้ | ONE PIECE SPECIALIST</p>
+</div>
+
+<div class="flex justify-center mb-6">
+  <div class="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 px-4 py-2 rounded-full flex items-center gap-2">
+    <div class="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></div>
+    <span class="text-[12px] font-black text-purple-300 tracking-widest">แผงควบคุมสำหรับ Admin</span>
+    <span id="adminBadge" class="text-[8px] bg-purple-500 text-white px-2 py-0.5 rounded-full font-black">CM-0000</span>
+  </div>
+</div>
+
+<div id="notAdmin" class="hidden bg-red-500/10 border border-red-500/30 rounded-[16px] p-6 text-center mb-6">
+  <div class="text-[24px] mb-2">🔒</div>
+  <div class="text-[13px] font-bold text-red-300">หน้านี้สำหรับแอดมินเท่านั้น</div>
+  <div class="text-[11px] text-zinc-500 mt-1">กรุณาล็อกอินด้วยอีเมลแอดมิน</div>
+  <a href="https://www.cardmatem.store/" class="mt-4 inline-block bg-zinc-800 px-5 py-2 rounded-full text-[11px]">กลับหน้าแรก</a>
+</div>
+
+<div id="adminPanel" class="space-y-3 mb-10">
+
+  
+  <a href="/qr-print" class="block bg-[#1e1c24] border border-yellow-400/30 rounded-[16px] p-4 flex items-center justify-between card-glow-yellow min-h-[68px]">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-yellow-400"></div><div class="w-6 h-6 rounded bg-yellow-500/20 flex items-center justify-center text-[10px]">🖨️</div></div><div><div class="text-[12.5px] font-bold text-yellow-300 flex items-center gap-1.5">พิมพ์ QR Sticker V2 <span class="text-[7px] bg-yellow-500 text-black px-1 py-0.5 rounded font-black">QR</span></div><div class="text-[10px] text-zinc-400">สุ่ม CM-xxxxxx + บันทึก printed_blank ผูกระบบ</div></div></div><div class="text-yellow-400">›</div>
+  </a>
+
+  <!-- ลบ ลิ้งค์ 2 สีเขียวไป Card ออกตามสั่ง -->
+
+<!-- ลบ ตลาดเทรด V2 ออกตามที่พี่สั่ง 13 ส.ค. 2026 -->
+
+  <a href="/admin-pregrade" class="block bg-[#1e1c24] border border-blue-400/30 rounded-[16px] p-4 flex items-center justify-between card-glow-blue min-h-[68px]">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-blue-400"></div><div class="w-6 h-6 rounded bg-blue-500/20 flex items-center justify-center text-[10px]">📦</div></div><div><div class="text-[12.5px] font-bold text-blue-300 flex items-center gap-1.5">ระบบ Pregrade (แอดมิน) <span class="text-[7px] bg-blue-500 text-white px-1 py-0.5 rounded font-black">HUB</span></div><div class="text-[10px] text-zinc-400">ดูรูปยืนยัน • จัดการสถานะ • ถ่าย RAW 10 รูป</div></div></div><div class="text-blue-400 flex-shrink-0 ml-2">›</div>
+  </a>
+
+  <!-- Admin Trade Green - ใต้ PSA/Pregrade ไม่มี .html ตามสั่ง -->
+  <a href="/admin-trade" class="block bg-[#1e1c24] border border-emerald-400/30 rounded-[16px] p-4 flex items-center justify-between card-glow-green min-h-[68px]">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div><div class="w-6 h-6 rounded bg-emerald-500/20 flex items-center justify-center text-[10px]">💼</div></div><div><div class="text-[12.5px] font-bold text-emerald-300 flex items-center gap-1.5">Admin Trade <span class="text-[7px] bg-emerald-500 text-black px-1 py-0.5 rounded font-black">TRADE</span> <span class="text-[7px] bg-zinc-700 text-white px-1 py-0.5 rounded font-black">ไม่มี .html</span></div><div class="text-[10px] text-zinc-400">จัดการเทรด • อนุมัติ • ลบรายการ • อยู่ใต้ PSA</div></div></div><div class="text-emerald-400 flex-shrink-0 ml-2">›</div>
+  </a>
+
+  <a href="/admin-add-card" class="block bg-[#1e1c24] border border-red-400/30 rounded-[16px] p-4 flex items-center justify-between min-h-[68px]" style="box-shadow:inset 3px 0 0 #ef4444, 0 0 20px rgba(239,68,68,0.1)">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-red-400"></div><div class="w-6 h-6 rounded bg-red-500/20 flex items-center justify-center text-[10px]">🏷️</div></div><div><div class="text-[12.5px] font-bold text-red-300 flex items-center gap-1.5">Add QR Matem เข้าระบบ <span class="text-[7px] bg-red-500 text-white px-1 py-0.5 rounded font-black">QR</span></div><div class="text-[10px] text-zinc-400">เพิ่มการ์ด • แปะ QR • ผูกเจ้าของ • บันทึก cards</div></div></div><div class="text-red-400 flex-shrink-0 ml-2">›</div>
+  </a>
+
+  <a href="/admin-transfers" id="transferBtn" class="block bg-[#1e1c24] border border-purple-400/30 rounded-[16px] p-4 flex items-center justify-between min-h-[68px] relative overflow-hidden" style="box-shadow:inset 3px 0 0 #a855f7, 0 0 20px rgba(168,85,247,0.15)">
+    <div class="absolute top-0 right-0 bg-purple-500 text-white text-[8px] px-2 py-1 rounded-bl-lg font-black" id="pendingBadge">รอ 0</div>
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-purple-400"></div><div class="w-6 h-6 rounded bg-purple-500/20 flex items-center justify-center text-[10px]">🔄</div></div><div><div class="text-[12.5px] font-bold text-purple-300 flex items-center gap-1.5">อนุมัติ เปลี่ยนเจ้าของการ์ด <span class="text-[7px] bg-purple-500 text-white px-1 py-0.5 rounded font-black">TRANSFER</span></div><div class="text-[10px] text-zinc-400">ดูสลิป • อนุมัติโอน • ประวัติ</div></div></div><div class="text-purple-400 flex-shrink-0 ml-2">›</div>
+  </a>
+
+  <a href="/admin-psa" class="block bg-[#1e1c24] border border-orange-400/30 rounded-[16px] p-4 flex items-center justify-between card-glow-orange min-h-[68px]">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-orange-400"></div><div class="w-6 h-6 rounded bg-orange-500/20 flex items-center justify-center text-[10px]">🇯🇵</div></div><div><div class="text-[12.5px] font-bold text-orange-300 flex items-center gap-1.5">ระบบส่งเกรด PSA Japan (แอดมิน) <span class="text-[7px] bg-orange-500 text-white px-1 py-0.5 rounded font-black">PSA</span></div><div class="text-[10px] text-zinc-400">สร้างออเดอร์ • เลื่อนสถานะ • 60-80 วัน</div></div></div><div class="text-orange-400 flex-shrink-0 ml-2">›</div>
+  </a>
+
+  <div class="pt-2 text-[10px] text-zinc-600">จัดการระบบ</div>
+
+  <a href="/admin-members" class="block bg-[#1e1c24] border border-yellow-400/20 rounded-[16px] p-4 flex items-center justify-between min-h-[68px]" style="box-shadow:inset 3px 0 0 #facc15, 0 0 20px rgba(250,204,21,0.1)">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-yellow-400"></div><div class="w-6 h-6 rounded bg-yellow-500/20 flex items-center justify-center text-[10px]">👥</div></div><div><div class="text-[12.5px] font-bold text-yellow-200">จัดการสมาชิก / ลูกค้า</div><div class="text-[10px] text-zinc-400">ดู CM-0000 ถึง CM-XXXX • แก้ไขข้อมูล • ตั้งสิทธิ์</div></div></div><div class="text-yellow-300">›</div>
+  </a>
+
+  <a href="/admin-vault/" class="block bg-[#1e1c24] border border-white/70 rounded-[16px] p-4 flex items-center justify-between min-h-[68px]" style="box-shadow:inset 3px 0 0 #ffffff, 0 0 20px rgba(255,255,255,0.08)">
+    <div class="flex gap-3 items-center"><div class="flex flex-col items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div><div class="w-6 h-6 rounded bg-white/10 border border-white/20 flex items-center justify-center text-[10px]">📦</div></div><div><div class="text-[12.5px] font-semibold text-red-500 flex items-center gap-1.5 tracking-wide">ไฟล์หลัก Card Matem ทั้งหมด <span class="text-[7px] bg-red-600 text-white px-1.5 py-0.5 rounded font-black ml-1">VAULT</span></div><div class="text-[10px] text-zinc-400">คลังไฟล์ลับ • กันหาย • เฉพาะ CM-0000</div></div></div><div class="text-white">›</div>
+  </a>
+
+
+
+  <div class="bg-[#1e1c24] border border-white/5 rounded-[16px] p-4">
+    <div class="flex items-center justify-between mb-2"><div class="text-[12px] font-bold text-white">🔧 ตั้งค่าระบบโอน - Free / ปกติ 29 บาท</div><div id="adminFeeModeLabel" class="text-[9px] font-bold px-2.5 py-1 rounded-full bg-green-500 text-black">FREE</div></div>
+    <div id="adminFeeStatusText" class="text-[11px] text-zinc-400">สถานะปัจจุบัน: 🎉 โอนฟรีโปรโมชั่น</div>
+    <div class="grid grid-cols-2 gap-2 mt-3"><button onclick="setFeeMode('free')" id="btnFreeMode" class="py-2.5 rounded-xl text-[11px] font-black border border-green-500/30 bg-green-500/10 text-green-300">🎉 โอนฟรีโปรโมชั่น</button><button onclick="setFeeMode('paid')" id="btnPaidMode" class="py-2.5 rounded-xl text-[11px] font-black border border-white/10 bg-zinc-800 text-zinc-400">💰 เก็บ 29 บาท</button></div>
+    <div class="text-[8px] text-zinc-600 mt-2">* มีผลทันทีทุกการโอน - เก็บใน site_settings.transfer_fee_mode + localStorage</div>
+  </div>
+
+  <div class="bg-[#1e1c24] border border-white/5 rounded-[16px] p-4">
+    <div class="flex items-center justify-between mb-2"><div class="text-[12px] font-bold text-white">💰 ตั้งค่าราคา Pregrade - โปร 150 / ปกติ 200</div><div id="adminPregradeModeLabel" class="text-[9px] font-bold px-2.5 py-1 rounded-full bg-yellow-400 text-black">200 BAHT</div></div>
+    <div id="adminPregradeStatusText" class="text-[11px] text-zinc-400">สถานะปัจจุบัน: 💰 ปกติ 200/ใบ</div>
+    <div class="grid grid-cols-2 gap-2 mt-3"><button onclick="setPregradePrice(150)" id="btnPre150" class="py-2.5 rounded-xl text-[11px] font-black border border-white/10 bg-zinc-800 text-zinc-400">🎉 โปร 150/ใบ</button><button onclick="setPregradePrice(200)" id="btnPre200" class="py-2.5 rounded-xl text-[11px] font-black border border-yellow-400 bg-yellow-400 text-black">💰 ปกติ 200/ใบ</button></div>
+    <div class="text-[8px] text-zinc-600 mt-2">* มีผลทันที - เก็บใน site_settings.pregrade_price + localStorage • ใช้ใน pregrade.html</div>
+  </div>
+
+</div>
+
+<!-- footer removed -->
+
+</div>
+
+<script>
+// FIX ปุ่มกลับหน้าแรก - ให้ทำงานได้หลังแก้ Index หลายรอบ
+document.addEventListener('DOMContentLoaded', function(){
+  const backBtn = document.getElementById('backHomeBtn');
+  if(backBtn){
+    backBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      // ล้าง session QR กันวนลูป
+      try{
+        sessionStorage.removeItem('qr_source');
+        sessionStorage.removeItem('qr_time');
+      }catch(err){}
+      // กลับหน้าแรกแบบชัวร์ๆ ไม่ติด PWA cache
+      window.location.href = 'https://www.cardmatem.store/';
+    });
+  }
+});
+
+const SUPABASE_URL='https://mgandefbbgvlfqqzfnoe.supabase.co';
+const anonKey='sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+const supa=window.supabase.createClient(SUPABASE_URL, anonKey);
+const ADMIN_EMAILS=['cardmatem@gmail.com','jellopy2ea@gmail.com','dekchaimaten@gmail.com','admin@cardmatem.store','vasan.jitpim@gmail.com','vasan.jitpim@gmail.com'];
+const FEE_STORAGE_KEY='cm_transfer_fee_mode';
+
+async function check(){
+  const {data:{user}}=await supa.auth.getUser();
+  if(!user){document.getElementById('notAdmin').classList.remove('hidden');document.getElementById('adminPanel').classList.add('hidden');return;}
+  const isAdmin=cmIsAdmin(user?.email,((user.email||'').toLowerCase()) || (user.email||'').toLowerCase()=== 'vasan.jitpim@gmail.com';
+  if(!isAdmin){document.getElementById('notAdmin').classList.remove('hidden');document.getElementById('adminPanel').classList.add('hidden');return;}
+  document.getElementById('adminBadge').innerText=user.email.split('@')[0];
+  try{
+    const {data}=await supa.from('ownership_transfers').select('id').eq('status','pending_slip');
+    const c=data?.length||0;
+    document.getElementById('pendingBadge').innerText='รอ '+c;
+    if(c>0){document.getElementById('pendingBadge').classList.add('bg-red-500');document.getElementById('pendingBadge').classList.remove('bg-purple-500');}
+  }catch(e){}
+  loadFeeMode();
+}
+
+async function loadFeeMode(){
+  let mode='free';
+  try{
+    const {data}=await supa.from('site_settings').select('value').eq('key','transfer_fee_mode').maybeSingle();
+    if(data && data.value) mode=data.value;
+    else mode=localStorage.getItem(FEE_STORAGE_KEY)||'free';
+  }catch(e){ mode=localStorage.getItem(FEE_STORAGE_KEY)||'free'; }
+  localStorage.setItem(FEE_STORAGE_KEY, mode);
+  updateAdminPanelUI(mode);
+}
+
+async function setFeeMode(mode){
+  localStorage.setItem(FEE_STORAGE_KEY,mode);
+  try{
+    const {error}=await supa.from('site_settings').upsert({key:'transfer_fee_mode', value:mode},{onConflict:'key'});
+    if(error) throw error;
+  }catch(e){ showModal('บันทึกไม่สำเร็จ: '+e.message); return; }
+  updateAdminPanelUI(mode);
+  try{ localStorage.setItem('cm_fee_update_ts', Date.now().toString()); }catch(e){}
+  showModal(mode==='free'?'ตั้งเป็น โอนฟรี แล้ว ✅':'ตั้งเป็น เก็บ 29 บาท แล้ว ✅');
+}
+
+function updateAdminPanelUI(mode){
+  const statusText=document.getElementById('adminFeeStatusText');
+  const modeLabel=document.getElementById('adminFeeModeLabel');
+  const btnFree=document.getElementById('btnFreeMode');
+  const btnPaid=document.getElementById('btnPaidMode');
+  if(!statusText) return;
+  const isFree=mode==='free';
+  statusText.innerText=isFree?'สถานะปัจจุบัน: 🎉 โอนฟรีโปรโมชั่น (ลูกค้าโอนฟรี)':'สถานะปัจจุบัน: 💰 เก็บ 29 บาท (ต้องแนบสลิป)';
+  modeLabel.innerText=isFree?'FREE':'29 BAHT';
+  modeLabel.className=isFree?'text-[9px] font-bold px-2.5 py-1 rounded-full bg-green-500 text-black':'text-[9px] font-bold px-2.5 py-1 rounded-full bg-red-500 text-white';
+  if(btnFree && btnPaid){
+    if(isFree){
+      btnFree.className='py-2.5 rounded-xl text-[11px] font-black border border-green-500 bg-green-500 text-black';
+      btnPaid.className='py-2.5 rounded-xl text-[11px] font-black border border-white/10 bg-zinc-800 text-zinc-400';
+    }else{
+      btnPaid.className='py-2.5 rounded-xl text-[11px] font-black border border-red-500 bg-red-500 text-white';
+      btnFree.className='py-2.5 rounded-xl text-[11px] font-black border border-white/10 bg-zinc-800 text-zinc-400';
+    }
+  }
+}
+
+async function checkWithPregrade(){ await check(); await loadPregradePriceAdmin(); }
+checkWithPregrade();
+
+const PRE_PRICE_KEY='cm_pregrade_price';
+async function loadPregradePriceAdmin(){
+  let price=200;
+  try{
+    const {data}=await supa.from('site_settings').select('value').eq('key','pregrade_price').maybeSingle();
+    if(data && data.value) price=parseInt(data.value);
+    else price=parseInt(localStorage.getItem(PRE_PRICE_KEY)||'200');
+  }catch(e){ price=parseInt(localStorage.getItem(PRE_PRICE_KEY)||'200'); }
+  localStorage.setItem(PRE_PRICE_KEY, String(price));
+  updatePregradePriceUI(price);
+}
+async function setPregradePrice(price){
+  localStorage.setItem(PRE_PRICE_KEY, String(price));
+  try{
+    const {error}=await supa.from('site_settings').upsert({key:'pregrade_price', value:String(price)},{onConflict:'key'});
+    if(error) throw error;
+  }catch(e){ showModal('บันทึกไม่สำเร็จ: '+e.message); return; }
+  updatePregradePriceUI(price);
+  try{ localStorage.setItem('cm_pregrade_update_ts', Date.now().toString()); }catch(e){}
+  showModal(price==150?'ตั้งโปร 150/ใบ แล้ว ✅':'ตั้งปกติ 200/ใบ แล้ว ✅');
+}
+function updatePregradePriceUI(price){
+  const statusText=document.getElementById('adminPregradeStatusText');
+  const modeLabel=document.getElementById('adminPregradeModeLabel');
+  const btn150=document.getElementById('btnPre150');
+  const btn200=document.getElementById('btnPre200');
+  if(!statusText) return;
+  const isPromo=price==150;
+  statusText.innerText=isPromo?'สถานะปัจจุบัน: 🎉 โปรโมชั่น 150/ใบ (ลูกค้าจ่ายถูก)':'สถานะปัจจุบัน: 💰 ปกติ 200/ใบ';
+  modeLabel.innerText=isPromo?'150 BAHT':'200 BAHT';
+  modeLabel.className=isPromo?'text-[9px] font-bold px-2.5 py-1 rounded-full bg-green-500 text-black':'text-[9px] font-bold px-2.5 py-1 rounded-full bg-yellow-400 text-black';
+  if(btn150 && btn200){
+    if(isPromo){
+      btn150.className='py-2.5 rounded-xl text-[11px] font-black border border-green-500 bg-green-500 text-black';
+      btn200.className='py-2.5 rounded-xl text-[11px] font-black border border-white/10 bg-zinc-800 text-zinc-400';
+    }else{
+      btn200.className='py-2.5 rounded-xl text-[11px] font-black border border-yellow-400 bg-yellow-400 text-black';
+      btn150.className='py-2.5 rounded-xl text-[11px] font-black border border-white/10 bg-zinc-800 text-zinc-400';
+    }
+  }
+}
+
+</script>
+
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(confirm(msg) && onOk) onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+</body>
+</html>

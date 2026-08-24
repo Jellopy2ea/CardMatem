@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>PSA Japan - ส่ง Psa Japan กันเถอะ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="common.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Kanit',sans-serif;background:#050507;color:white}
+.step-active{background:#facc15!important;color:#000!important;box-shadow:0 0 15px rgba(250,204,21,0.5)}
+.step-done{background:#22c55e!important;color:#fff!important}
+.card-glow-yellow{box-shadow:inset 3px 0 0 #facc15, 0 0 20px rgba(250,204,21,0.08)}
+.card-glow-blue{box-shadow:inset 3px 0 0 #60a5fa, 0 0 20px rgba(96,165,250,0.08)}
+.card-glow-green{box-shadow:inset 3px 0 0 #34d399, 0 0 20px rgba(52,211,153,0.08)}
+.card-glow-purple{box-shadow:inset 3px 0 0 #a78bfa, 0 0 20px rgba(168,85,247,0.1)}
+@keyframes waveFlag{0%,100%{transform:rotate(-3deg) scaleY(1)}50%{transform:rotate(3deg) scaleY(1.06)}}
+.flag-wave{display:inline-block;animation:waveFlag 1.4s ease-in-out infinite;transform-origin:left center}
+.white-red-text{background:linear-gradient(90deg,#ffffff 0%,#ffe4e6 40%,#ff6b6b 75%,#dc2626 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:900}
+@keyframes shineMove{0%{transform:translateX(-100%)}60%{transform:translateX(200%)}100%{transform:translateX(200%)}}
+@keyframes pulseBlue{0%,100%{box-shadow:0 0 10px rgba(96,165,250,0.3)}50%{box-shadow:0 0 20px rgba(96,165,250,0.6)}}
+.btn-blue-3d{position:relative;overflow:hidden;background:linear-gradient(180deg,#93c5fd 0%, #60a5fa 50%, #3b82f6 100%);border:1.5px solid #000;color:#000;font-weight:900;text-shadow:0 1px 0 rgba(255,255,255,0.6);box-shadow:0 3px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(0,0,0,0.2);animation:pulseBlue 2s infinite}
+.btn-blue-3d::after{content:'';position:absolute;top:0;left:0;width:45%;height:100%;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);transform:translateX(-100%);animation:shineMove 2.5s infinite}
+@keyframes flashYellowThin{0%,100%{border-top-color:rgba(250,204,21,0.15);border-bottom-color:rgba(250,204,21,0.15)}50%{border-top-color:#facc15;border-bottom-color:#facc15}}
+.flash-yellow-thin{border-top:1px solid rgba(250,204,21,0.2);border-bottom:1px solid rgba(250,204,21,0.2);border-left:3px solid #facc15;animation:flashYellowThin 2s infinite}
+.border-top-bottom-thin{border-top:1px solid rgba(255,255,255,0.08);border-bottom:1px solid rgba(255,255,255,0.08);border-left:3px solid;border-right:1px solid rgba(255,255,255,0.05)}
+.border-blue-tb{border-left-color:#60a5fa}
+.border-green-tb{border-left-color:#34d399}
+.border-purple-tb{border-left-color:#a78bfa}
+@keyframes flashNext{0%,100%{border-color:#facc15;box-shadow:0 0 10px rgba(250,204,21,0.3)}50%{border-color:#f97316;box-shadow:0 0 20px rgba(249,115,22,0.5)}}
+.btn-next-flash{position:relative;overflow:hidden;background:linear-gradient(90deg,#facc15 0%,#fbbf24 50%,#f97316 100%);border:1.5px solid #facc15;color:#000;font-weight:900;animation:flashNext 1.6s infinite}
+.btn-next-flash::after{content:'';position:absolute;top:0;left:0;width:40%;height:100%;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);transform:translateX(-100%);animation:shineMove 2s infinite}
+.photo-square{aspect-ratio:1/1;background:#000;border:1.5px dashed rgba(255,255,255,0.25);border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;transition:all .2s}
+.photo-square.has-photo{border-style:solid;border-color:#22c55e}
+.photo-square img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.photo-square .overlay{position:relative;z-index:2;text-align:center;pointer-events:none}
+.locked-tab{pointer-events:none;cursor:default}
+</style>
+</head>
+<body class="flex justify-center bg-black">
+<div class="w-full max-w-[480px] min-h-screen bg-[#0a0a0f] px-5 py-4">
+
+<div class="flex justify-between py-3">
+<a href="/psa" class="text-[11px] bg-zinc-800 border border-white/10 px-3 py-1.5 rounded-full">← PSA</a>
+<div class="flex gap-2 items-center">
+<button id="topRegisterBtnPSA" class="text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">สมัครสมาชิก</button>
+<button id="topLoginBtnPSA" class="text-[10px] px-3 py-1.5 rounded-full bg-yellow-400 text-black font-black">ล็อกอิน</button>
+<button id="topLogoutBtnPSA" class="hidden text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">ออก</button>
+</div>
+</div>
+
+<h1 class="text-[24px] font-black mt-3 leading-tight">
+<span class="flag-wave">🇯🇵</span> <span class="white-red-text">ส่ง Psa Japan กันเถอะ</span>
+</h1>
+<div class="mt-2 bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-2.5 text-[10px] text-yellow-300">📦 <b>ทุกบิล +150 บาท</b> ค่าส่งไป-กลับญี่ปุ่น (ต่อบิล ไม่ใช่ต่อใบ)</div>
+<div class="mt-3 bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-400/30 rounded-xl p-3 flex items-start gap-2">
+  <div class="text-[18px]">🎁</div>
+  <div>
+    <div class="text-[11px] font-black text-emerald-300">แถมถ่าย RAW 4K ฟรี ก่อนส่ง PSA</div>
+    <div class="text-[10px] text-emerald-200/80 mt-1 leading-relaxed">ทุกใบที่ส่ง PSA เราถ่าย RAW 4K 8 รูป/ใบ ฟรี (หน้า/หลัง/วัด Center/UV/ตำหนิ) + สร้าง QR โฉนดให้ก่อนส่งญี่ปุ่น • ดูรูปได้ใน my-raw ตลอดชีพ</div>
+  </div>
+</div>
+
+
+<div class="mt-4 bg-[#1e1c24] border border-yellow-400/20 rounded-2xl p-3">
+<div class="flex items-center justify-between text-[9px]">
+<div id="w1" class="text-center flex-1 locked-tab"><div id="c1" class="w-8 h-8 mx-auto bg-yellow-400 text-black rounded-full flex items-center justify-center font-black step-active">1</div><div class="mt-1 text-yellow-300 font-bold">เลือก<br>แพ็คเกจ</div></div>
+<div class="text-zinc-600">→</div>
+<div id="w2" class="text-center flex-1 locked-tab"><div id="c2" class="w-8 h-8 mx-auto bg-zinc-800 border border-white/10 rounded-full flex items-center justify-center">2</div><div class="mt-1 text-zinc-400">ถ่ายรูป<br>การ์ด</div></div>
+<div class="text-zinc-600">→</div>
+<div id="w3" class="text-center flex-1 locked-tab"><div id="c3" class="w-8 h-8 mx-auto bg-zinc-800 border border-white/10 rounded-full flex items-center justify-center">3</div><div class="mt-1 text-zinc-400">ชำระ<br>เงิน</div></div>
+<div class="text-zinc-600">→</div>
+<div id="w4" class="text-center flex-1 locked-tab"><div id="c4" class="w-8 h-8 mx-auto bg-zinc-800 border border-white/10 rounded-full flex items-center justify-center">4</div><div class="mt-1 text-zinc-400">สรุป<br>ส่งออเดอร์</div></div>
+</div>
+</div>
+
+<div class="bg-[#16121f] border border-white/10 rounded-2xl p-4 mt-4 space-y-4">
+
+<div id="step1" class="space-y-4">
+<div>
+<label class="text-[10px] text-zinc-400">รหัสสมาชิก (ว่างไว้ได้ถ้ายังไม่เป็นสมาชิก)</label>
+<input id="memberNo" type="text" value="" placeholder="ว่างไว้ได้ - ถ้ายังไม่สมัคร" class="w-full mt-1 bg-black border border-yellow-400/20 rounded-xl px-4 py-3 text-[13px] outline-none">
+<div id="memberBadge" class="mt-2 bg-zinc-900 border border-white/5 rounded-xl p-2.5 text-[10px] text-zinc-500">ยังไม่ได้ล็อกอิน - ช่องจะว่างไว้ก่อน</div>
+</div>
+<div class="space-y-3">
+<div class="text-[11px] font-black text-yellow-300">เลือกแพ็คเกจ (เพิ่ม/ลดได้ อิสระต่อกัน)</div>
+<div class="grid grid-cols-1 gap-2.5">
+<div class="bg-[#1e1c24] rounded-[16px] p-4 flex justify-between items-center flash-yellow-thin card-glow-yellow">
+<div><div class="text-[10px] text-zinc-500">REGULAR • $80 • 60-75 วัน</div><div class="text-[14px] font-black text-yellow-300">3,800 <span class="text-[10px] text-zinc-500">/ใบ</span></div><div class="text-[8px] bg-yellow-400 text-black px-2 py-0.5 rounded-full inline-block mt-1 font-bold">ยอดนิยม</div></div>
+<div class="flex items-center gap-2"><button onclick="changePkg('regular',-1)" class="w-8 h-8 bg-zinc-800 border border-white/10 rounded-lg font-black">-</button><input id="count-regular" type="number" value="0" min="0" class="w-12 bg-black border border-white/10 rounded-lg text-center py-1.5 text-[13px] font-black" onchange="recalc()"><button onclick="changePkg('regular',1)" class="w-8 h-8 bg-zinc-800 border border-white/10 rounded-lg font-black">+</button></div>
+</div>
+<div class="bg-[#1e1c24] rounded-[16px] p-4 flex justify-between items-center border-top-bottom-thin border-blue-tb card-glow-blue">
+<div><div class="text-[10px] text-zinc-500">EXPRESS • $149 • 30-45 วัน</div><div class="text-[14px] font-black text-yellow-300">6,300 <span class="text-[10px] text-zinc-500">/ใบ</span></div><div class="text-[8px] bg-[#38bdf8] text-black px-2 py-0.5 rounded-full inline-block mt-1 font-bold">เร็วขึ้น</div></div>
+<div class="flex items-center gap-2"><button onclick="changePkg('express',-1)" class="w-8 h-8 bg-zinc-800 border border-white/10 rounded-lg font-black">-</button><input id="count-express" type="number" value="0" min="0" class="w-12 bg-black border border-white/10 rounded-lg text-center py-1.5 text-[13px] font-black" onchange="recalc()"><button onclick="changePkg('express',1)" class="w-8 h-8 bg-zinc-800 border border-white/10 rounded-lg font-black">+</button></div>
+</div>
+<div class="bg-[#1e1c24] rounded-[16px] p-4 flex justify-between items-center border-top-bottom-thin border-green-tb card-glow-green">
+<div><div class="text-[10px] text-zinc-500">SUPER • $349 • 25-35 วัน</div><div class="text-[14px] font-black text-yellow-300">14,500 <span class="text-[10px] text-zinc-500">/ใบ</span></div><div class="text-[8px] bg-[#34d399] text-black px-2 py-0.5 rounded-full inline-block mt-1 font-bold">ด่วนพิเศษ</div></div>
+<div class="flex items-center gap-2"><button onclick="changePkg('super',-1)" class="w-8 h-8 bg-zinc-800 border border-white/10 rounded-lg font-black">-</button><input id="count-super" type="number" value="0" min="0" class="w-12 bg-black border border-white/10 rounded-lg text-center py-1.5 text-[13px] font-black" onchange="recalc()"><button onclick="changePkg('super',1)" class="w-8 h-8 bg-zinc-800 border border-white/10 rounded-lg font-black">+</button></div>
+</div>
+<div class="bg-[#1e1c24] rounded-[16px] p-4 flex justify-between items-center border-top-bottom-thin border-purple-tb card-glow-purple">
+<div><div class="text-[10px] text-zinc-500">WALK • $599 • 15-25 วัน</div><div class="text-[14px] font-black text-yellow-300">25,000 <span class="text-[10px] text-zinc-500">/ใบ</span></div><div class="text-[8px] bg-[#a78bfa] text-white px-2 py-0.5 rounded-full inline-block mt-1 font-bold">ด่วนที่สุด</div></div>
+<div class="flex items-center gap-2"><button onclick="changePkg('walk',-1)" class="w-8 h-8 bg-zinc-800 border border-white/10 rounded-lg font-black">-</button><input id="count-walk" type="number" value="0" min="0" class="w-12 bg-black border border-white/10 rounded-lg text-center py-1.5 text-[13px] font-black" onchange="recalc()"><button onclick="changePkg('walk',1)" class="w-8 h-8 bg-zinc-800 border border-white/10 rounded-lg font-black">+</button></div>
+</div>
+</div>
+<div class="bg-black border border-white/10 rounded-xl p-3 space-y-1 text-[11px]">
+<div class="flex justify-between"><span class="text-zinc-400">REGULAR x<span id="s-regular">0</span></span><span id="p-regular" class="text-white">0 บ.</span></div>
+<div class="flex justify-between"><span class="text-zinc-400">EXPRESS x<span id="s-express">0</span></span><span id="p-express" class="text-white">0 บ.</span></div>
+<div class="flex justify-between"><span class="text-zinc-400">SUPER x<span id="s-super">0</span></span><span id="p-super" class="text-white">0 บ.</span></div>
+<div class="flex justify-between"><span class="text-zinc-400">WALK x<span id="s-walk">0</span></span><span id="p-walk" class="text-white">0 บ.</span></div>
+<div class="flex justify-between border-t border-white/10 pt-1"><span class="text-zinc-400">+ ส่งญี่ปุ่น</span><span class="text-white">150 บ.</span></div>
+<div class="flex justify-between font-black text-[13px] pt-1 border-t border-yellow-400/20"><span class="text-yellow-300">รวม <span id="totalCards">0</span> ใบ</span><span class="text-yellow-400"><span id="totalShow">150</span> บ.</span></div>
+</div>
+<div class="mt-2 bg-zinc-900/80 border border-white/10 rounded-xl px-3 py-2.5 text-[10px] text-zinc-300 flex items-start gap-1.5"><span>📌</span><span>ราคานี้ไม่รวมค่าส่งกลับให้ลูกค้า หลังเกรดเสร็จแล้ว</span></div>
+<label class="text-[10px] text-zinc-400">ชื่อการ์ดรวม</label>
+<textarea id="cardNames" class="w-full bg-black border border-white/10 rounded-xl p-3 text-[12px] h-[60px]" placeholder="เช่น Luffy 2ใบ, Zoro 1ใบ"></textarea>
+<button onclick="goNext1()" class="w-full btn-next-flash py-3 rounded-xl">ต่อไป 📸</button>
+</div>
+</div>
+
+<div id="step2" class="hidden space-y-4">
+<div class="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-[11px] text-yellow-200 leading-relaxed">
+📌ถ่ายรูปการ์ด หน้า หลัง / 1 ใบ เพื่อยืนยันส่ง Psa Japan<br>
+<span class="text-[10px] text-zinc-400">เลือกแล้ว <span id="needPhotoCount" class="font-black bg-yellow-400 text-black px-2 py-0.5 rounded-full">0</span> ใบ</span> <span id="step2Check" class="ml-2 text-[10px]"></span>
+</div>
+<div id="photoContainer" class="space-y-4"></div>
+<div class="flex gap-2"><button onclick="showStep(1)" class="flex-1 bg-zinc-800 py-3 rounded-xl text-[12px]">← กลับ</button><button onclick="validateStep2AndGo()" class="flex-1 btn-next-flash py-3 rounded-xl">ต่อไป 💳</button></div>
+</div>
+
+<div id="step3" class="hidden space-y-4">
+<div class="bg-black border border-white/10 rounded-xl p-3 space-y-1 text-[11px]">
+<div class="flex justify-between"><span class="text-zinc-400">ยอดจากแพ็คเกจ</span><span id="sumPkg" class="text-white">0 บ.</span></div>
+<div class="flex justify-between"><span class="text-zinc-400">+ ค่าส่งญี่ปุ่น</span><span class="text-white">150 บ.</span></div>
+<div class="flex justify-between font-black text-[13px] border-t border-white/10 pt-2"><span class="text-yellow-300">ยอดต้องโอน</span><span id="sumTotal3" class="text-yellow-400">0 บ.</span></div>
+</div>
+<div class="mt-2 bg-zinc-900/80 border border-white/10 rounded-xl px-3 py-2.5 text-[10px] text-zinc-300 flex items-start gap-1.5"><span>📌</span><span>ราคานี้ไม่รวมค่าส่งกลับให้ลูกค้า หลังเกรดเสร็จแล้ว</span></div>
+
+<!-- แก้ใหม่ตามสั่ง: ฟีนิกซ์หน้าข้อความ, ขนาดเท่ากัน, สีเลข บช. ตามสีธนาคาร, เอาข้อความล่างออก -->
+<div class="space-y-3">
+<div class="grid grid-cols-1 gap-3">
+<!-- KBANK - KBank แนวนอน ขนาดเท่ากัน -->
+<div class="relative bg-[#1e1c24] border border-white/5 rounded-xl p-3.5 card-glow-green">
+<button onclick="copyBank('0048573029','กสิกร')" class="absolute top-3 right-3 bg-[#00A651] text-white text-[8px] font-black px-3 py-1.5 rounded-full">คัดลอก</button>
+<div class="flex items-center gap-2">
+<span class="bg-white rounded-lg px-2 py-1 h-[28px] w-[110px] flex items-center justify-center"><span class="text-[10px] font-black">LOGO</span></span>
+<span class="text-[11px] font-black text-white">KBANK - KBank</span>
+</div>
+<div class="text-[17px] font-black mt-2 tracking-wider" style="color:#00A651">004-8-57302-9</div>
+<div class="text-[11px] font-bold text-white mt-1">วสันต์ จิตพิมพ์</div>
+</div>
+<!-- KRUNGTHAI NEXT - ฟีนิกซ์หน้าข้อความ แนวนอน เหมือน KBank ขนาดใกล้เคียง -->
+<div class="relative bg-[#1e1c24] border border-white/5 rounded-xl p-3.5" style="box-shadow:inset 3px 0 0 #0ea5e9, 0 0 20px rgba(14,165,233,0.15)">
+<button onclick="copyBank('4800250110','กรุงไทย')" class="absolute top-3 right-3 bg-[#0ea5e9] text-white text-[8px] font-black px-3 py-1.5 rounded-full">คัดลอก</button>
+<div class="flex items-center gap-2">
+<span class="bg-white rounded-lg px-2 py-1 h-[28px] w-[110px] flex items-center justify-center"><span class="text-[10px] font-black">LOGO</span></span>
+<span class="text-[11px] font-black text-white">Krungthai NEXT</span>
+</div>
+<div class="text-[17px] font-black mt-2 tracking-wider" style="color:#0ea5e9">480-0-25011-0</div>
+<div class="text-[11px] font-bold text-white mt-1">วสันต์ จิตพิมพ์</div>
+</div>
+</div>
+<div id="copyFeedback" class="hidden bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 text-[10px] text-emerald-300 text-center"></div>
+</div>
+
+<div>
+<label class="text-[10px] text-zinc-400">แนบสลิปโอนเงิน (บีบอัดเหลือ ~200KB พอดูได้)</label>
+<input type="file" id="slipFile" accept="image/*" class="w-full mt-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-[11px]">
+<div id="slipPreview" class="hidden mt-2"><img id="slipImg" class="w-full rounded-xl border border-white/10 max-h-[300px] object-contain bg-black"></div>
+</div>
+<div class="flex gap-2"><button onclick="showStep(2)" class="flex-1 bg-zinc-800 py-3 rounded-xl text-[12px]">← กลับ</button><button onclick="goNext3()" class="flex-1 btn-next-flash py-3 rounded-xl">ต่อไป ✅</button></div>
+</div>
+
+<div id="step4" class="hidden space-y-4">
+<div class="bg-black border border-white/10 rounded-xl p-4 space-y-2 text-[11px] card-glow-yellow">
+<div class="text-[12px] font-black text-yellow-300 mb-2">สรุปออเดอร์ PSA Japan</div>
+<div class="flex justify-between"><span class="text-zinc-400">รหัสสมาชิก</span><span id="finalMember" class="text-white font-bold">-</span></div>
+<div class="flex justify-between"><span class="text-zinc-400">จำนวนการ์ด</span><span id="finalCount" class="text-white">0 ใบ</span></div>
+<div id="finalPkgList" class="space-y-1 text-[10px] bg-zinc-900 rounded-lg p-2"></div>
+<div class="flex justify-between"><span class="text-zinc-400">ชื่อการ์ด</span><span id="finalNames" class="text-white text-right max-w-[200px] truncate">-</span></div>
+<div class="flex justify-between"><span class="text-zinc-400">รูปยืนยัน</span><span id="finalPhotoCount" class="text-white">0 รูป</span></div>
+<div class="flex justify-between font-black text-[13px] border-t border-white/10 pt-2 mt-2"><span class="text-yellow-300">ยอดโอน</span><span id="finalTotal" class="text-yellow-400">0 บ.</span></div>
+</div>
+<div class="mt-2 bg-zinc-900/80 border border-white/10 rounded-xl px-3 py-2.5 text-[10px] text-zinc-300 flex items-start gap-1.5"><span>📌</span><span>ราคานี้ไม่รวมค่าส่งกลับให้ลูกค้า หลังเกรดเสร็จแล้ว</span></div>
+<button id="submitOrder" class="w-full btn-next-flash py-4 rounded-xl text-[13px]">ส่งออเดอร์ ทันที 🚀</button>
+<div id="successBox" class="hidden bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 text-center"><div class="text-[28px]">🎉</div><div class="text-[14px] font-black text-emerald-300 mt-2">ส่งออเดอร์ PSA สำเร็จ!</div><div class="text-[11px] text-zinc-400 mt-1">รหัสบิล: <span id="orderIdShow" class="text-white font-bold">-</span></div><div class="mt-4 grid grid-cols-2 gap-2"><a id="goTrack" href="/psa" class="bg-zinc-800 py-2.5 rounded-xl text-[11px] text-center">🔍 ติดตามสถานะ</a><a id="goMyAcc" href="/my-account" class="bg-yellow-400 text-black font-black py-2.5 rounded-xl text-[11px] text-center">👤 My Account</a></div></div>
+<div class="flex gap-2"><button onclick="showStep(3)" class="flex-1 bg-zinc-800 py-3 rounded-xl text-[12px]">← กลับ</button></div>
+</div>
+
+</div>
+</div>
+
+<script>
+const SUPABASE_URL='https://mgandefbbgvlfqqzfnoe.supabase.co';
+const SUPABASE_KEY='sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+const supa=window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const PRICES={regular:3800, express:6300, super:14500, walk:25000};
+const SHIP_FEE=150;
+let currentUser=null;
+let cardPhotos={};
+function showStep(n){
+ const {totalCards:cur}=recalc();
+ if(cur===0 && n>1){ showModal('เลือกแพ็คเกจก่อน'); return; }
+ if(n===1) cleanupPhotos(cur);
+ document.querySelectorAll('#step1, #step2, #step3, #step4').forEach(s=>s.classList.add('hidden'));
+ document.getElementById('step'+n).classList.remove('hidden');
+ for(let i=1;i<=4;i++){
+   const el=document.getElementById('w'+i); if(!el) continue;
+   const circle=el.querySelector('div');
+   if(i<n){ circle.className='w-8 h-8 mx-auto bg-emerald-500 text-white rounded-full flex items-center justify-center font-black step-done'; circle.innerText='✓'; }
+   else if(i===n){ circle.className='w-8 h-8 mx-auto bg-yellow-400 text-black rounded-full flex items-center justify-center font-black step-active'; circle.innerText=String(i); }
+   else { circle.className='w-8 h-8 mx-auto bg-zinc-800 border border-white/10 rounded-full flex items-center justify-center'; circle.innerText=String(i); }
+ }
+ if(n===2) renderPhotoInputs();
+ if(n===3 || n===4) updateSummary();
+ window.scrollTo({top:0, behavior:'smooth'});
+}
+function goNext1(){ if(recalc().totalCards===0){ showModal('เลือกแพ็คเกจอย่างน้อย 1 ใบ'); return; } showStep(2); }
+function goNext3(){ if(!document.getElementById('slipFile').files[0] && !compressedSlipFile){ showModal('แนบสลิปโอนเงิน'); return; } showStep(4); }
+function cleanupPhotos(totalCards){ for(const k in cardPhotos) if(parseInt(k)>totalCards) delete cardPhotos[k]; if(totalCards===0) cardPhotos={}; }
+function changePkg(type, delta){ const inp=document.getElementById('count-'+type); let v=parseInt(inp.value)||0; v+=delta; if(v<0)v=0; if(v>20)v=20; inp.value=v; const {totalCards}=recalc(); cleanupPhotos(totalCards); }
+function recalc(){
+ let totalPkg=0, totalCards=0;
+ for(const k of Object.keys(PRICES)){
+   const cnt=parseInt(document.getElementById('count-'+k).value)||0;
+   totalCards+=cnt; totalPkg+=cnt*PRICES[k];
+   const sEl=document.getElementById('s-'+k); if(sEl) sEl.innerText=cnt;
+   const pEl=document.getElementById('p-'+k); if(pEl) pEl.innerText=(cnt*PRICES[k]).toLocaleString()+' บ.';
+ }
+ const total=totalCards>0?totalPkg+SHIP_FEE:SHIP_FEE;
+ const tc=document.getElementById('totalCards'); if(tc) tc.innerText=totalCards;
+ const ts=document.getElementById('totalShow'); if(ts) ts.innerText=total.toLocaleString();
+ const sp=document.getElementById('sumPkg'); if(sp) sp.innerText=totalPkg.toLocaleString()+' บ.';
+ const st=document.getElementById('sumTotal3'); if(st) st.innerText=total.toLocaleString()+' บ.';
+ const need=document.getElementById('needPhotoCount'); if(need) need.innerText=totalCards;
+ const fc=document.getElementById('finalCount'); if(fc) fc.innerText=totalCards+' ใบ';
+ const ft=document.getElementById('finalTotal'); if(ft) ft.innerText=total.toLocaleString()+' บ.';
+ const list=document.getElementById('finalPkgList');
+ if(list) list.innerHTML=Object.keys(PRICES).map(k=>{ const cnt=parseInt(document.getElementById('count-'+k).value)||0; if(!cnt) return ''; return `<div class="flex justify-between"><span>${k.toUpperCase()} x${cnt}</span><span>${(cnt*PRICES[k]).toLocaleString()} บ.</span></div>`; }).join('')+(totalCards?`<div class="flex justify-between border-t border-white/10 pt-1 mt-1"><span>+ ค่าส่งญี่ปุ่น</span><span>150 บ.</span></div>`:'');
+ if(totalCards < Object.keys(cardPhotos).length) cleanupPhotos(totalCards);
+ return {totalPkg, totalCards, total};
+}
+function renderPhotoInputs(){
+ const {totalCards}=recalc(); const container=document.getElementById('photoContainer'); container.innerHTML='';
+ if(!totalCards){ container.innerHTML='<div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-[11px] text-red-300">❌ ยังไม่ได้เลือกแพ็คเกจ</div>'; return; }
+ cleanupPhotos(totalCards);
+ for(let i=1;i<=totalCards;i++){
+   if(!cardPhotos[i]) cardPhotos[i]={front:null, back:null, name:''};
+   container.innerHTML+=`<div class="bg-[#1e1c24] border border-white/5 rounded-2xl p-3 space-y-3"><div class="flex justify-between items-center"><div class="text-[11px] font-black text-yellow-300">การ์ดใบที่ ${i}</div><div id="status-${i}" class="text-[9px] px-2 py-0.5 rounded-full bg-zinc-800">รอรูป</div><button onclick="clearCardPhoto(${i})" class="text-[9px] bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full">🗑️ ล้าง</button></div><input value="${cardPhotos[i].name||''}" oninput="cardPhotos[${i}].name=this.value" placeholder="ชื่อการ์ดใบที่ ${i}" class="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-[11px]"><div class="grid grid-cols-2 gap-3"><div class="space-y-2"><div id="box-${i}-front" onclick="openCamera(${i},'front')" class="photo-square ${cardPhotos[i].front?'has-photo':''}"><img id="img-${i}-front" src="${cardPhotos[i].front||''}" style="${cardPhotos[i].front?'display:block':'display:none'}"><div id="overlay-${i}-front" class="overlay ${cardPhotos[i].front?'hidden':''}"><div class="text-[22px]">📸</div><div class="text-[12px] font-black text-white mt-1">หน้า</div></div></div><input id="cam-${i}-front" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhoto(${i},'front',this)"><input id="file-${i}-front" type="file" accept="image/*" class="hidden" onchange="handlePhoto(${i},'front',this)"><div class="grid grid-cols-2 gap-1.5"><button onclick="openCamera(${i},'front')" class="bg-yellow-400/20 border border-yellow-400/30 text-yellow-300 rounded-lg py-2 text-[9px] font-bold">📸 ถ่ายรูป</button><button onclick="openFilePicker(${i},'front')" class="bg-zinc-800 border border-white/10 rounded-lg py-2 text-[9px] text-zinc-300">📁 เลือกไฟล์</button></div></div><div class="space-y-2"><div id="box-${i}-back" onclick="openCamera(${i},'back')" class="photo-square ${cardPhotos[i].back?'has-photo':''}"><img id="img-${i}-back" src="${cardPhotos[i].back||''}" style="${cardPhotos[i].back?'display:block':'display:none'}"><div id="overlay-${i}-back" class="overlay ${cardPhotos[i].back?'hidden':''}"><div class="text-[22px]">📸</div><div class="text-[12px] font-black text-white mt-1">หลัง</div></div></div><input id="cam-${i}-back" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhoto(${i},'back',this)"><input id="file-${i}-back" type="file" accept="image/*" class="hidden" onchange="handlePhoto(${i},'back',this)"><div class="grid grid-cols-2 gap-1.5"><button onclick="openCamera(${i},'back')" class="bg-yellow-400/20 border border-yellow-400/30 text-yellow-300 rounded-lg py-2 text-[9px] font-bold">📸 ถ่ายรูป</button><button onclick="openFilePicker(${i},'back')" class="bg-zinc-800 border border-white/10 rounded-lg py-2 text-[9px] text-zinc-300">📁 เลือกไฟล์</button></div></div></div></div>`;
+ }
+ setTimeout(()=>{updateAllStatus();},50);
+}
+function clearCardPhoto(i){ cardPhotos[i]={front:null, back:null, name:''}; renderPhotoInputs(); }
+function openCamera(idx, side){ document.getElementById(`cam-${idx}-${side}`).click(); }
+function openFilePicker(idx, side){ document.getElementById(`file-${idx}-${side}`).click(); }
+async function compressTo400KB(file, maxKB=400){
+ return new Promise((resolve, reject)=>{
+   const img=new Image();
+   img.onload=()=>{
+     let maxDim=1280, w=img.width, h=img.height;
+     if(w>maxDim||h>maxDim){ if(w>h){h=Math.round(h*maxDim/w); w=maxDim;} else {w=Math.round(w*maxDim/h); h=maxDim;} }
+     const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+     let q=0.85; let dataUrl=canvas.toDataURL('image/jpeg', q);
+     while(dataUrl.length/1.37/1024>maxKB && q>0.3){ q-=0.07; dataUrl=canvas.toDataURL('image/jpeg', q); }
+     resolve({dataUrl, kb:Math.round(dataUrl.length/1.37/1024), quality:q});
+   };
+   img.onerror=reject; img.src=URL.createObjectURL(file);
+ });
+}
+async function handlePhoto(idx, side, input){
+ const file=input.files[0]; if(!file) return;
+ const statusEl=document.getElementById(`status-${idx}`); if(statusEl) statusEl.innerText='⏳ บีบอัด...';
+ try{ const {dataUrl}=await compressTo400KB(file,400); if(!cardPhotos[idx]) cardPhotos[idx]={}; cardPhotos[idx][side]=dataUrl; const img=document.getElementById(`img-${idx}-${side}`); const overlay=document.getElementById(`overlay-${idx}-${side}`); const box=document.getElementById(`box-${idx}-${side}`); if(img){img.src=dataUrl; img.style.display='block';} if(overlay) overlay.classList.add('hidden'); if(box) box.classList.add('has-photo'); updateCardStatus(idx); updateStep2Check(); updatePhotoCount(); }catch(e){}
+ input.value='';
+}
+function updateAllStatus(){ const {totalCards}=recalc(); for(let i=1;i<=totalCards;i++) updateCardStatus(i); updateStep2Check(); updatePhotoCount(); }
+function updateCardStatus(idx){ const el=document.getElementById(`status-${idx}`); if(!el) return; const f=!!cardPhotos[idx]?.front, b=!!cardPhotos[idx]?.back; if(f&&b){ el.className='text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300'; el.innerText='✅ ครบ'; } else if(f||b){ el.className='text-[9px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300'; el.innerText='⚠️ ขาด '+(f?'หลัง':'หน้า'); } else { el.className='text-[9px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400'; el.innerText='รอรูป'; } }
+function updateStep2Check(){ const {totalCards}=recalc(); let c=0; for(let i=1;i<=totalCards;i++) if(cardPhotos[i]?.front&&cardPhotos[i]?.back) c++; const el=document.getElementById('step2Check'); if(el) el.innerText=totalCards? (c===totalCards?`✅ ${c}/${totalCards} ครบ`:`(${c}/${totalCards})`):''; }
+function validateStep2AndGo(){ const {totalCards}=recalc(); if(!totalCards){showStep(1); return;} for(let i=1;i<=totalCards;i++) if(!cardPhotos[i]?.front||!cardPhotos[i]?.back){showModal(`การ์ดใบที่ ${i} ยังถ่ายไม่ครบ`); return;} showStep(3); }
+function updatePhotoCount(){ let cnt=0; Object.values(cardPhotos).forEach(p=>{if(p.front)cnt++; if(p.back)cnt++;}); document.getElementById('finalPhotoCount').innerText=cnt+' รูป'; }
+function updateSummary(){ recalc(); document.getElementById('finalMember').innerText=document.getElementById('memberNo').value.trim()||'-'; document.getElementById('finalNames').innerText=document.getElementById('cardNames').value.trim()||'-'; updatePhotoCount(); }
+function copyBank(num,label){ navigator.clipboard.writeText(num).then(()=>{ const fb=document.getElementById('copyFeedback'); fb.classList.remove('hidden'); fb.innerText='✅ คัดลอกแล้ว: '+num+' ('+label+')'; setTimeout(()=>fb.classList.add('hidden'),3000); }); }
+async function checkAuth(){
+ const {data:{user}}=await supa.auth.getUser();
+ const badge=document.getElementById('memberBadge');
+ const input=document.getElementById('memberNo');
+ const regBtn=document.getElementById('topRegisterBtnPSA');
+ const logBtn=document.getElementById('topLoginBtnPSA');
+ const outBtn=document.getElementById('topLogoutBtnPSA');
+ if(user){
+   currentUser=user;
+   if(regBtn) regBtn.classList.add('hidden');
+   if(logBtn) logBtn.classList.add('hidden');
+   if(outBtn) outBtn.classList.remove('hidden');
+   badge.className='mt-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 text-[10px] text-emerald-300';
+   const displayName = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0] || 'สมาชิก';
+   try{
+     const {data:cust}=await supa.from('customers').select('member_no').eq('email', user.email).maybeSingle();
+     let fmt = 'CM-0000';
+     if(cust?.member_no!=null){
+       fmt='CM-'+String(cust.member_no).padStart(4,'0');
+       input.value=fmt;
+       document.getElementById('finalMember').innerText=fmt;
+     }
+     badge.innerHTML=`✅ ${displayName} • ล็อกอินแล้ว - ${fmt}`;
+   }catch(e){
+     badge.innerHTML=`✅ ${displayName} • ล็อกอินแล้ว - CM-0000`;
+   }
+ } else {
+   currentUser=null;
+   if(regBtn) regBtn.classList.remove('hidden');
+   if(logBtn) logBtn.classList.remove('hidden');
+   if(outBtn) outBtn.classList.add('hidden');
+   input.value='';
+   badge.className='mt-2 bg-red-500/10 border border-red-500/20 rounded-xl p-2.5 text-[10px] text-red-300';
+   badge.innerHTML='❌ ยังไม่ได้ล็อกอิน • กด <b>สมัครสมาชิก</b> หรือ <b>ล็อกอิน</b> ด้านบนเพื่อสมัครด้วย Google';
+ }
+}
+let compressedSlipFile=null;
+document.getElementById('slipFile').onchange=async e=>{
+ const f=e.target.files[0]; if(!f) return; const preview=document.getElementById('slipPreview'); const imgEl=document.getElementById('slipImg'); preview.classList.remove('hidden');
+ try{ const {dataUrl, blob}=await compressSlipTo200KB(f); imgEl.src=dataUrl; compressedSlipFile=blob; }catch(err){ imgEl.src=URL.createObjectURL(f); compressedSlipFile=f; }
+};
+async function compressSlipTo200KB(file, maxKB=200){ return new Promise((resolve, reject)=>{ const img=new Image(); img.onload=()=>{ let maxDim=1000,w=img.width,h=img.height; if(w>maxDim||h>maxDim){ if(w>h){h=Math.round(h*maxDim/w); w=maxDim;} else {w=Math.round(w*maxDim/h); h=maxDim;} } const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h); let q=0.75, dataUrl=canvas.toDataURL('image/jpeg', q); while(dataUrl.length/1.37/1024>maxKB && q>0.25){ q-=0.08; dataUrl=canvas.toDataURL('image/jpeg', q); } canvas.toBlob(blob=>resolve({dataUrl, blob}), 'image/jpeg', q); }; img.onerror=reject; img.src=URL.createObjectURL(file); }); }
+
+document.getElementById('submitOrder').onclick=async()=>{
+ const mRaw=document.getElementById('memberNo').value.trim(); if(!currentUser){location.href='/my-account'; return;} if(!mRaw){showStep(1); return;}
+ const {totalCards, total}=recalc(); if(!totalCards){showStep(1); return;}
+ if(!document.getElementById('slipFile').files[0] && !compressedSlipFile){showStep(3); return;}
+ for(let i=1;i<=totalCards;i++) if(!cardPhotos[i]?.front||!cardPhotos[i]?.back){showStep(2); return;}
+ const btn=document.getElementById('submitOrder'); btn.innerText='⏳ กำลังอัปโหลด...'; btn.disabled=true;
+ const pkgs={}; Object.keys(PRICES).forEach(k=>{ const c=parseInt(document.getElementById('count-'+k).value)||0; if(c) pkgs[k]={count:c, price:PRICES[k], subtotal:c*PRICES[k]}; });
+ const orderCode='PSA-JP-'+new Date().toISOString().slice(2,7).replace('-','')+'-'+String(Math.floor(Math.random()*900)+100);
+ function b64toBlob(b64){ try{ const arr=b64.split(','), mime=arr[0].match(/:(.*?);/)[1], bstr=atob(arr[1]); let n=bstr.length; const u8=new Uint8Array(n); while(n--)u8[n]=bstr.charCodeAt(n); return new Blob([u8],{type:mime}); }catch(e){return null;} }
+ let uploaded={}; try{ for(const idx in cardPhotos){ if(parseInt(idx)>totalCards) continue; uploaded[idx]={}; for(const s of ['front','back']){ const b64=cardPhotos[idx][s]; if(!b64) continue; const blob=b64toBlob(b64); if(blob){ const fn=`${orderCode}/card_${idx}_${s}_${Date.now()}.jpg`; let up=await supa.storage.from('psa_cards').upload(fn, blob, {upsert:true}); if(up.error) up=await supa.storage.from('slips').upload(fn, blob, {upsert:true}); if(!up.error){ let pub=supa.storage.from('psa_cards').getPublicUrl(fn); uploaded[idx][s]=pub.data?.publicUrl||b64; } else uploaded[idx][s]=b64; } } } }catch(e){uploaded=cardPhotos;}
+ let slipUrl=null; try{ const f=compressedSlipFile||document.getElementById('slipFile').files[0]; const fn=`${orderCode}/slip_${Date.now()}.jpg`; const {error}=await supa.storage.from('slips').upload(fn, f, {upsert:true}); if(!error){ const {data}=supa.storage.from('slips').getPublicUrl(fn); slipUrl=data.publicUrl; } }catch(e){}
+ const payload={code:orderCode, member_no:mRaw, customer_code:mRaw, status:'ตรวจสอบ', card_count:totalCards, card_names:document.getElementById('cardNames').value.trim(), card_photos:uploaded, total_amount:total, package_breakdown:pkgs, slip_url:slipUrl, created_at:new Date().toISOString()};
+ let {error}=await supa.from('psa_submissions').insert(payload);
+ if(error){ showModal(error.message); btn.disabled=false; btn.innerText='❌ ลองใหม่'; return; }
+ document.getElementById('orderIdShow').innerText=orderCode; document.getElementById('successBox').classList.remove('hidden'); btn.innerText='✅ สำเร็จ'; btn.disabled=false; cardPhotos={};
+};
+
+async function doLoginPSA(){
+  const {error} = await supa.auth.signInWithOAuth({provider:'google', options:{redirectTo: window.location.href}});
+  if(error) showModal(error.message);
+}
+document.getElementById('topLoginBtnPSA')?.addEventListener('click', doLoginPSA);
+document.getElementById('topRegisterBtnPSA')?.addEventListener('click', async ()=>{
+  const {data:{user}} = await supa.auth.getUser();
+  if(!user){ await doLoginPSA(); } else { window.location.href='/my-account'; }
+});
+document.getElementById('topLogoutBtnPSA')?.addEventListener('click', async ()=>{ await supa.auth.signOut(); location.reload(); });
+
+checkAuth(); recalc(); showStep(1);
+</script>
+
+<!-- CM Modal Red White Yellow - Fixed Bug ไม่เปลี่ยนธีม -->
+<div id="cmModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeCMModal()"></div>
+  <div class="relative min-h-screen flex items-center justify-center p-4">
+    <div class="bg-red-500/20 backdrop-blur-xl border-2 border-yellow-400/50 rounded-2xl max-w-md w-full shadow-2xl">
+      <div class="p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center">⚠️</div>
+          <h3 id="cmModalTitle" class="text-white font-bold text-lg">แจ้งเตือน</h3>
+        </div>
+        <p id="cmModalMsg" class="text-white/90 mb-6 whitespace-pre-line"></p>
+        <div id="cmModalActions" class="flex gap-3 justify-end"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// CM Modal Fix - แก้ alert/confirm เป็น Modal แดงขาวเหลือง ไม่เปลี่ยนธีม
+function showModal(msg, title){
+  title = title || 'แจ้งเตือน';
+  const m = document.getElementById('cmModal');
+  if(!m){ alert(msg); return; } // FIXED recursion
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ตกลง</button>';
+  m.classList.remove('hidden');
+}
+function showModalConfirm(msg, title, onOk){
+  title = title || 'ยืนยัน';
+  const m = document.getElementById('cmModal');
+  if(!m){ if(confirm(msg) && onOk) onOk(); return; }
+  document.getElementById('cmModalTitle').textContent = title;
+  document.getElementById('cmModalMsg').textContent = msg;
+  document.getElementById('cmModalActions').innerHTML = '<button onclick="closeCMModal()" class="px-5 py-2.5 bg-white/10 text-white rounded-xl border border-white/20 mr-2">ยกเลิก</button><button id="cmConfirmOk" class="px-6 py-2.5 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-300 transition">ยืนยัน</button>';
+  m.classList.remove('hidden');
+  document.getElementById('cmConfirmOk').onclick = function(){ closeCMModal(); onOk&&onOk(); };
+}
+function closeCMModal(){
+  const m = document.getElementById('cmModal');
+  if(m) m.classList.add('hidden');
+}
+</script>
+
+</body>
+</html>

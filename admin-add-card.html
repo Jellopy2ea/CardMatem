@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cardmatem Admin - QR + 8 Photos (No Price)</title>
+<script src="common.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>body{font-family:'Kanit',sans-serif;background:#0a0f1a;color:#e2e8f0}</style>
+</head>
+<body class="p-4">
+<div class="max-w-3xl mx-auto">
+<h2 class="text-2xl font-bold mb-1">🏀 Cardmatem <span class="bg-green-500 text-black px-3 py-1 rounded-full text-sm">QR + 8 รูป ถาวร</span></h2>
+<p class="text-sm text-gray-400 mb-4">พิมพ์ CM เองทุกครั้งกันพลาด + สแกน QR ผูกสมาชิก - ไม่ต้องใส่ราคา</p>
+
+<div class="bg-gray-900 rounded-2xl p-5 space-y-4 border border-gray-800">
+
+<!-- 1. QR SCAN -->
+<label class="font-bold">1. QR Code (สแกนจากสติกเกอร์)</label>
+<div class="flex gap-2">
+<input id="qr_code" class="flex-1 bg-black border border-gray-700 rounded-xl px-3 py-3 text-white" placeholder="สแกน QR หรือพิมพ์ เช่น QR-1001">
+<button id="btnScan" type="button" class="bg-yellow-400 text-black font-bold px-4 rounded-xl">📷 สแกน</button>
+</div>
+<div id="reader" class="hidden mt-2 rounded-xl overflow-hidden"></div>
+<div id="qr_status" class="text-xs text-gray-400"></div>
+
+<!-- 2. Member No -->
+<label class="font-bold">2. รหัสสมาชิก (พิมพ์เอง)</label>
+<input id="member_no" class="w-full bg-black border border-gray-700 rounded-xl px-3 py-3 text-white" placeholder="เช่น CM-0001">
+<div class="text-xs text-gray-500">พิมพ์ทุกครั้ง กันพลาด</div>
+
+<!-- 3. Card Info -->
+<label class="font-bold">3. ชื่อการ์ด</label>
+<input id="title" class="w-full bg-black border border-gray-700 rounded-xl px-3 py-3" placeholder="เช่น Boa Hancock PSA10">
+
+<!-- PRICE REMOVED PER REQUEST - HIDE BUT KEEP FOR BACKWARD COMPAT -->
+<div id="priceWrap" style="display:none">
+<input id="price" type="number" value="0">
+</div>
+
+<label class="font-bold">4. โน๊ตสั้นๆ (โชว์ให้ลูกค้าเห็นในสถานะการ์ด) - ไม่ใส่ก็ได้</label>
+<textarea id="desc" rows="3" class="w-full bg-black border border-gray-700 rounded-xl px-3 py-2" placeholder="เช่น ปิ่นขอบมุมนิดหน่อย การ์ดสวย พร้อมเกรด / ไม่มีตำหนิ"></textarea>
+<div class="text-xs text-gray-500">ตัวอย่าง: ปิ่นขอบมุมนิดหน่อย การ์ดสวย พร้อมเกรด, ไม่มีตำหนิ, ผิวสะอาด</div>
+
+<!-- 5. 8 Photos -->
+<label class="font-bold text-green-400">5. รูป 8 ใบ (เลือกจากเครื่องเท่านั้น - บีบอัดเหลือ ~400KB อัตโนมัติ)</label>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="photoGrid"></div>
+
+<button id="btnUpload" class="w-full bg-cyan-400 text-black font-extrabold py-4 rounded-xl text-lg mt-4">อัพโหลดถาวร (R2+D1) - 8 รูป</button>
+
+<div id="log" class="mt-4 whitespace-pre-wrap text-sm leading-6 bg-black p-3 rounded-xl border border-gray-800"></div>
+<div id="preview" class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+
+</div>
+</div>
+
+<script>
+
+const urlParams = new URLSearchParams(window.location.search);
+const PSA_ORDER_ID = urlParams.get('psa_order');
+const QR_FROM_PSA = urlParams.get('qr');
+const MODE = urlParams.get('mode');
+if(QR_FROM_PSA){ document.getElementById('qr_code').value = QR_FROM_PSA; }
+if(PSA_ORDER_ID){
+  const info = document.createElement('div');
+  info.className='bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-2 text-[11px] text-yellow-300 mb-3';
+  info.innerHTML = `🎁 แถมถ่าย RAW 4K ฟรี จากบิล PSA: <b>${PSA_ORDER_ID}</b> QR: ${QR_FROM_PSA||''} | ถ่ายครบ 8 รูปแล้วจะกลับไปหน้า PSA อัตโนมัติ`;
+  document.querySelector('.bg-gray-900').prepend(info);
+  document.getElementById('member_no').value = 'PSA-ORDER';
+}
+const EDGE_URL = "https://r2-proxy.vasan-jitpim.workers.dev/";
+const PHOTO_FIELDS = [
+  {key:"front", label:"หน้า"},
+  {key:"back", label:"หลัง"},
+  {key:"center_front", label:"วัด Center หน้า"},
+  {key:"center_back", label:"วัด Center หลัง"},
+  {key:"uv_front", label:"UV 365nm หน้า"},
+  {key:"uv_back", label:"UV 365nm หลัง"},
+  {key:"defect_front", label:"ตำหนิ (วงแดง) หน้า"},
+  {key:"defect_back", label:"ตำหนิ (วงแดง) หลัง"},
+];
+const grid = document.getElementById('photoGrid');
+PHOTO_FIELDS.forEach(f=>{
+  const div = document.createElement('div');
+  div.className = "bg-black border border-gray-700 rounded-xl p-3";
+  div.innerHTML = `<div class="text-sm font-bold mb-1">${f.label}</div>
+  <input type="file" accept="image/*" data-key="${f.key}" class="w-full text-xs photoInput">
+  <div class="text-[11px] text-gray-500 mt-1 status" id="status_${f.key}">ยังไม่ได้เลือก - จะบีบอัดเหลือ ~400KB</div>`;
+  grid.appendChild(div);
+});
+async function compressTo400KB(file){
+  return new Promise((resolve)=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let quality = 0.85;
+        let width = img.width;
+        let height = img.height;
+        const maxSide = 2048;
+        if(width>maxSide || height>maxSide){
+          const ratio = Math.min(maxSide/width, maxSide/height);
+          width = width*ratio; height = height*ratio;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img,0,0,width,height);
+        function tryCompress(q){
+          canvas.toBlob(blob=>{
+            if(!blob) { resolve(file); return; }
+            const kb = blob.size/1024;
+            const st = document.getElementById(`status_${file._key}`);
+            if(st) st.textContent = `บีบอัด: ${Math.round(kb)}KB (ต้นฉบับ ${Math.round(file.size/1024)}KB)`;
+            if(kb<=450 || q<=0.3){
+              resolve(new File([blob], file.name, {type:'image/jpeg'}));
+            } else {
+              tryCompress(q-0.15);
+            }
+          }, 'image/jpeg', q);
+        }
+        tryCompress(quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+let compressedFiles = {};
+document.querySelectorAll('.photoInput').forEach(inp=>{
+  inp.addEventListener('change', async (e)=>{
+    const key = e.target.dataset.key;
+    const file = e.target.files[0];
+    if(!file) return;
+    file._key = key;
+    const statusEl = document.getElementById(`status_${key}`);
+    statusEl.textContent = `กำลังบีบอัด ${file.name}...`;
+    const compressed = await compressTo400KB(file);
+    compressedFiles[key] = compressed;
+    statusEl.textContent = `✅ พร้อมอัพ: ${compressed.name} - ${Math.round(compressed.size/1024)}KB`;
+  });
+});
+let html5QrcodeScanner = null;
+document.getElementById('btnScan').onclick = async ()=>{
+  const readerEl = document.getElementById('reader');
+  readerEl.classList.toggle('hidden');
+  if(readerEl.classList.contains('hidden')){
+    if(html5QrcodeScanner){ await html5QrcodeScanner.stop(); html5QrcodeScanner=null; }
+    return;
+  }
+  if(!html5QrcodeScanner){
+    html5QrcodeScanner = new Html5Qrcode("reader");
+    html5QrcodeScanner.start({ facingMode:"environment" }, { fps:10, qrbox:250 },
+      (decoded)=>{
+        document.getElementById('qr_code').value = decoded;
+        document.getElementById('qr_status').textContent = `✅ สแกนได้: ${decoded} - ผูกกับสมาชิกที่พิมพ์`;
+        readerEl.classList.add('hidden');
+        html5QrcodeScanner.stop();
+        html5QrcodeScanner=null;
+      },
+      ()=>{}
+    );
+  }
+};
+document.getElementById('btnUpload').onclick = async ()=>{
+  const log = document.getElementById('log');
+  const preview = document.getElementById('preview');
+  const qr_code = document.getElementById('qr_code').value.trim();
+  const member_no = document.getElementById('member_no').value.trim();
+  const title = document.getElementById('title').value.trim();
+  const desc = document.getElementById('desc').value.trim();
+  if(!qr_code){ log.innerHTML='<span style="color:#f87171">❌ กรุณาสแกน QR ก่อน</span>'; return; }
+  if(!member_no){ log.innerHTML='<span style="color:#f87171">❌ กรุณาพิมพ์ CM-0001</span>'; return; }
+  if(!title){ log.innerHTML='<span style="color:#f87171">❌ ใส่ชื่อการ์ด</span>'; return; }
+  if(Object.keys(compressedFiles).length===0){ log.innerHTML='<span style="color:#f87171">❌ เลือกรูปอย่างน้อย 1 รูป (จากเครื่อง)</span>'; return; }
+  log.textContent = `⏳ กำลังอัพ ${Object.keys(compressedFiles).length} รูป -> ${EDGE_URL} ...`;
+  const btn = document.getElementById('btnUpload');
+  btn.disabled=true; btn.textContent='กำลังอัพโหลด...';
+  try{
+    const fd = new FormData();
+    fd.append('qr_code', qr_code);
+    fd.append('member_no', member_no);
+    fd.append('title', title);
+    fd.append('price', '0');
+    fd.append('description', desc);
+    for(const k in compressedFiles){
+      fd.append(k, compressedFiles[k], compressedFiles[k].name);
+    }
+    const res = await fetch(EDGE_URL, {method:'POST', body: fd});
+    const data = await res.json();
+    if(!res.ok) throw new Error(JSON.stringify(data));
+    log.innerHTML = `<span style="color:#4ade80">✅ อัพสำเร็จถาวร!</span>
+QR: ${data.qr_code} ผูกกับ ${data.member_no}
+DB ID: ${data.db_id}
+Title: ${data.title}
+โน๊ต: ${desc || '(ไม่มี)'}
+จำนวนรูป: ${data.count} รูป
+URL หลัก: ${data.url}
+`;
+    preview.innerHTML = '';
+    // FIXED: อัพเดท psa_submissions ว่าถ่าย RAW 8 รูปเสร็จแล้ว - กันหลุดกลางทาง
+    if(PSA_ORDER_ID){
+      try{
+        const supaClient = window.supabase ? supabase.createClient('https://mgandefbbgvlfqqzfnoe.supabase.co','sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h') : null;
+        if(supaClient){
+          await supaClient.from('psa_submissions').update({status:'ถ่าย RAW 4K 8 รูปเสร็จ - พร้อมส่งไปญี่ปุ่น', raw_photos: data.photos||[], raw_completed_at: new Date().toISOString(), updated_at: new Date().toISOString()}).eq('id', PSA_ORDER_ID);
+        }
+      }catch(e){ console.warn('update psa fail', e); }
+      setTimeout(()=>{ if(confirm('✅ ถ่าย RAW 8 รูปเสร็จแล้ว กลับไปหน้า Admin PSA?')) window.location.href='/admin-psa'; }, 800);
+    }
+
+    if(data.photos){
+      data.photos.forEach(p=>{
+        preview.innerHTML += `<div class="bg-black rounded-xl overflow-hidden border border-gray-800"><div class="text-[10px] p-1 bg-gray-800">${p.key}</div><img src="${p.url}" class="w-full"><a href="${p.url}" target="_blank" class="text-[10px] text-cyan-400 block p-1 truncate">${p.url}</a></div>`;
+      });
+    }
+  }catch(e){
+    log.innerHTML = `<span style="color:#f87171">❌ ${e.message}</span>`;
+  }finally{
+    btn.disabled=false; btn.textContent='อัพโหลดถาวร (R2+D1) - 8 รูป';
+  }
+};
+</script>
+</body>
+</html>

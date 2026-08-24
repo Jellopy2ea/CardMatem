@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>แอดมิน PSA - V7 FIXED</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="common.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Kanit',sans-serif; overflow-x:hidden; background:#0a0a0f; color:white}
+*{box-sizing:border-box}
+@media (max-width:640px){
+  .no-scrollbar::-webkit-scrollbar{display:none}
+  button, select, input{font-size:14px !important}
+}
+</style>
+</head>
+<body class="bg-[#0a0a0f] text-white min-h-screen flex justify-center">
+<div class="w-full max-w-[480px] md:max-w-[700px] mx-auto p-3 pb-20">
+
+  <div class="flex justify-between items-center py-3">
+    <a href="/" class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-black text-[10px]">CM</div><span class="font-black text-[13px]"><span class="text-yellow-400">Card</span> <span class="text-purple-400">Matem</span></span></a>
+    <a href="/admin" class="text-[10px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">‹ Admin</a>
+  </div>
+
+  <h1 class="text-[16px] font-black leading-tight mb-1">🔬 Admin PSA <span class="text-[9px] bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 px-2 py-1 rounded-full ml-2">V7 FIXED</span></h1>
+  <p class="text-[10px] text-zinc-500 mb-3">ไม่ค้างตลาด + คืนสถานะ</p>
+
+  <div class="bg-[#16121f] border border-white/10 rounded-[16px] p-3 mb-4">
+    <div class="flex flex-col gap-2">
+      <input id="memberInput" placeholder="CM-0002 หรือเบอร์โทร" class="w-full bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-[13px] outline-none">
+      <div class="flex gap-2">
+        <button id="loadBtn" class="flex-1 md:flex-none bg-zinc-800 border border-white/10 px-4 py-2.5 rounded-full text-[12px] whitespace-nowrap">โหลดการ์ด</button>
+        <select id="cardSelect" class="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2.5 text-[12px] min-w-0"><option value="">-- เลือกการ์ด --</option></select>
+      </div>
+      <button id="createBtn" class="w-full bg-yellow-400 text-black font-black py-3 rounded-full text-[13px]">+ สร้างบิล PSA</button>
+    </div>
+    <div id="cardsBox" class="text-[10px] text-zinc-500 mt-2 max-h-[80px] overflow-auto"></div>
+    <div id="logBox" class="bg-black border border-white/10 rounded-xl p-2 text-[9px] font-mono h-[90px] overflow-auto mt-3"></div>
+  </div>
+
+  <div id="billsBox" class="space-y-3"></div>
+
+</div>
+
+<script>
+const SUPABASE_URL='https://mgandefbbgvlfqqzfnoe.supabase.co';
+const SUPABASE_KEY='sb_publishable_36w7K1aKe2kUzLmQXqpWfA_gMsePh9h';
+const supa=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const STEPS=['ตรวจสอบ','ส่งไปญี่ปุ่นแล้ว','PSA รับแล้ว / กำลังเกรด','เกรดเสร็จ ส่งกลับไทย','ถึงร้านพร้อมรับ','จบงาน'];
+function log(msg,ok=true){ const el=document.getElementById('logBox'); if(!el) return; el.innerHTML=`<div>${ok?'✅':'❌'} ${new Date().toLocaleTimeString()} - ${msg}</div>`+el.innerHTML; }
+
+async function loadBills(){
+  log('โหลดบิล...');
+  const {data,error}=await supa.from('psa_submissions').select('*').order('created_at',{ascending:false}).limit(30);
+  if(error){ log('error: '+error.message,false); return; }
+  log(`เจอ ${data.length} บิล`);
+  const box=document.getElementById('billsBox');
+  box.innerHTML=data.map(b=>{
+    const opts=STEPS.map(s=>`<option value="${s}" ${s===b.status?'selected':''}>${s}</option>`).join('');
+    return `<div class="bg-[#1e1c24] border border-white/5 rounded-[16px] p-3">
+      <div class="flex flex-col gap-2">
+        <div class="flex flex-wrap gap-2 items-center"><span class="bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full text-[10px] font-black">${b.code}</span><span class="bg-zinc-800 px-2 py-1 rounded text-[9px]">${b.member_no||b.customer_code||''}</span>${b.card_qr_code?`<a href="/card?qr=${b.card_qr_code}" class="bg-yellow-400/20 text-yellow-300 px-2 py-1 rounded text-[9px]">${b.card_qr_code}</a>`:''}</div>
+        <div class="text-[10px] text-zinc-400">สถานะ: <b class="text-yellow-400">${b.status||'-'}</b> | ${b.total_amount||''}บ.</div>
+        <div class="grid grid-cols-2 gap-1.5 mt-1">
+          <button onclick="doCheckPass('${b.id}')" class="bg-emerald-600 text-white py-2 rounded-full text-[11px]">✅ ตรงปก</button>
+          <button onclick="doCheckFail('${b.id}')" class="bg-red-600 text-white py-2 rounded-full text-[11px]">❌ ไม่ตรงปก</button>
+        </div>
+        <div class="flex gap-1.5">
+          <select id="sel-${b.id}" class="flex-1 bg-zinc-900 border border-white/10 rounded-full px-3 py-2 text-[11px]">${opts}</select>
+          <button onclick="doUpdate('${b.id}','${b.card_qr_code||''}')" class="bg-yellow-500 text-black px-4 py-2 rounded-full text-[11px] font-black">อัพเดท</button>
+        </div>
+        <button onclick="goRaw8('${b.id}','${b.card_qr_code||''}')" class="w-full bg-blue-600 text-white py-2 rounded-full text-[11px] mt-1">📸 ถ่าย RAW 4K 8 รูป/ใบ - ฟรีแถม</button>
+        <button onclick="doFinish('${b.id}','${b.card_qr_code||''}')" class="w-full bg-emerald-700 text-white py-2 rounded-full text-[11px]">✅ จบงาน</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function doUpdate(id, cardQr){ const sel=document.getElementById('sel-'+id); const newStatus=sel.value; const {error}=await supa.from('psa_submissions').update({status:newStatus, updated_at:new Date().toISOString()}).eq('id',id); if(error){ log(error.message,false); showModal(error.message); return; } try{ const s=(newStatus||'').toLowerCase(); if(s.includes('onpsa') || s.includes('ญี่ปุ่น') || s.includes('psa รับ')){ if(cardQr){ await supa.from('market_cards').delete().eq('id', cardQr); await supa.from('market_listings').delete().eq('id', cardQr); await supa.from('market_cards').delete().eq('card_id', cardQr); await supa.from('market_listings').delete().eq('card_id', cardQr); await supa.from('cards').update({status:'OnPSA'}).eq('qr_code', cardQr); } } }catch(e){} log(`อัพเดท ${id} -> ${newStatus}`); 
+function goRaw8(billId, qr){
+  if(!qr){ showModal('บิลนี้ยังไม่มี QR เลือกการ์ดก่อน'); return; }
+  window.location.href = `/admin-add-card?psa_order=${billId}&qr=${encodeURIComponent(qr)}&mode=psa_raw`;
+}
+async function checkRawCount(qr){
+  try{
+    const {data}=await supa.from('cards').select('image_urls, photos').eq('qr_code', qr).maybeSingle();
+    const count = data?.image_urls?.length || Object.keys(data?.photos||{}).length || 0;
+    return count;
+  }catch(e){ return 0; }
+}
+loadBills();
+ } // FIXED
+async function doCheckPass(id){
+  if(!confirm('ยืนยันตรงปก?')) return;
+  await supa.from('psa_submissions').update({status:'ตรวจสอบแล้ว ตรงปก - รอถ่าย 8 รูป', updated_at:new Date().toISOString()}).eq('id',id);
+  
+function goRaw8(billId, qr){
+  if(!qr){ showModal('บิลนี้ยังไม่มี QR เลือกการ์ดก่อน'); return; }
+  window.location.href = `/admin-add-card?psa_order=${billId}&qr=${encodeURIComponent(qr)}&mode=psa_raw`;
+}
+async function checkRawCount(qr){
+  try{
+    const {data}=await supa.from('cards').select('image_urls, photos').eq('qr_code', qr).maybeSingle();
+    const count = data?.image_urls?.length || Object.keys(data?.photos||{}).length || 0;
+    return count;
+  }catch(e){ return 0; }
+}
+loadBills();
+
+}
+async function doCheckFail(id){
+  const reason=prompt('ไม่ตรงปกเพราะอะไร?','การ์ดไม่ตรงรูป');
+  if(reason===null) return;
+  await supa.from('psa_submissions').update({status:'ไม่ตรงปก - ตีกลับ: '+reason, updated_at:new Date().toISOString()}).eq('id',id);
+  
+function goRaw8(billId, qr){
+  if(!qr){ showModal('บิลนี้ยังไม่มี QR เลือกการ์ดก่อน'); return; }
+  window.location.href = `/admin-add-card?psa_order=${billId}&qr=${encodeURIComponent(qr)}&mode=psa_raw`;
+}
+async function checkRawCount(qr){
+  try{
+    const {data}=await supa.from('cards').select('image_urls, photos').eq('qr_code', qr).maybeSingle();
+    const count = data?.image_urls?.length || Object.keys(data?.photos||{}).length || 0;
+    return count;
+  }catch(e){ return 0; }
+}
+loadBills();
+
+}
+async function doFinish(id, cardQr){
+  if(!confirm('จบงาน '+id+' ?')) return;
+  await supa.from('psa_submissions').update({status:'จบงาน', updated_at:new Date().toISOString()}).eq('id',id);
+  
+function goRaw8(billId, qr){
+  if(!qr){ showModal('บิลนี้ยังไม่มี QR เลือกการ์ดก่อน'); return; }
+  window.location.href = `/admin-add-card?psa_order=${billId}&qr=${encodeURIComponent(qr)}&mode=psa_raw`;
+}
+async function checkRawCount(qr){
+  try{
+    const {data}=await supa.from('cards').select('image_urls, photos').eq('qr_code', qr).maybeSingle();
+    const count = data?.image_urls?.length || Object.keys(data?.photos||{}).length || 0;
+    return count;
+  }catch(e){ return 0; }
+}
+loadBills();
+
+}
+
+document.getElementById('loadBtn').onclick=async()=>{
+  const memberNo=document.getElementById('memberInput').value.trim();
+  const box=document.getElementById('cardsBox'); const sel=document.getElementById('cardSelect');
+  box.innerText='กำลังโหลด '+memberNo+'...';
+  try{
+    const num=parseInt(memberNo.replace('CM-',''))||null;
+    if(num!==null){
+      const {data}=await supa.from('cards').select('qr_code,title,status').eq('owner_member_no', num).limit(30);
+      if(data&&data.length){
+        sel.innerHTML='<option value="">-- เลือกการ์ด --</option>'+data.map(c=>`<option value="${c.qr_code}">${c.qr_code} - ${c.title||''} [${c.status||''}]</option>`).join('');
+        box.innerHTML=data.map(c=>`${c.qr_code} ${c.title||''}`).join('<br>');
+        return;
+      }
+    }
+    const {data}=await supa.from('cards').select('qr_code,title').limit(20);
+    sel.innerHTML='<option value="">-- เลือกการ์ด --</option>'+data.map(c=>`<option value="${c.qr_code}">${c.qr_code}</option>`).join('');
+    box.innerHTML=data.map(c=>c.qr_code).join('<br>');
+  }catch(e){ box.innerText='โหลดล้มเหลว: '+e.message; }
+};
+
+document.getElementById('createBtn').onclick=async()=>{
+  const memberInput=document.getElementById('memberInput').value.trim();
+  const selectedCard=document.getElementById('cardSelect').value;
+  if(!memberInput || !selectedCard){ showModal('ใส่ CM และเลือกการ์ด'); return; }
+  const newCode='PSA-'+Date.now().toString().slice(-6);
+  const payload={code:newCode, customer_code:memberInput, member_no:memberInput, card_qr_code:selectedCard, status:'รอตรวจสอบ', total_amount:0, created_at:new Date().toISOString()};
+  const {error}=await supa.from('psa_submissions').insert(payload);
+  if(error){ showModal(error.message); } else { log('สร้างบิล '+newCode); 
+function goRaw8(billId, qr){
+  if(!qr){ showModal('บิลนี้ยังไม่มี QR เลือกการ์ดก่อน'); return; }
+  window.location.href = `/admin-add-card?psa_order=${billId}&qr=${encodeURIComponent(qr)}&mode=psa_raw`;
+}
+async function checkRawCount(qr){
+  try{
+    const {data}=await supa.from('cards').select('image_urls, photos').eq('qr_code', qr).maybeSingle();
+    const count = data?.image_urls?.length || Object.keys(data?.photos||{}).length || 0;
+    return count;
+  }catch(e){ return 0; }
+}
+loadBills();
+ }
+};
+
+
+function goRaw8(billId, qr){
+  if(!qr){ showModal('บิลนี้ยังไม่มี QR เลือกการ์ดก่อน'); return; }
+  window.location.href = `/admin-add-card?psa_order=${billId}&qr=${encodeURIComponent(qr)}&mode=psa_raw`;
+}
+async function checkRawCount(qr){
+  try{
+    const {data}=await supa.from('cards').select('image_urls, photos').eq('qr_code', qr).maybeSingle();
+    const count = data?.image_urls?.length || Object.keys(data?.photos||{}).length || 0;
+    return count;
+  }catch(e){ return 0; }
+}
+loadBills();
+
+</script>
+</body>
+</html>
